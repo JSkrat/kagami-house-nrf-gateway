@@ -10,6 +10,10 @@
 #include <fstream>
 #include <sys/mman.h>
 
+#include "gpio/source/c_gpio.h"
+#include "gpio/source/cpuinfo.h"
+#include "gpio/source/odroid.h"
+
 State Driver::send()
 {
     int ret = ioctl(this->fileDescriptor, SPI_IOC_MESSAGE(1), &this->tr);
@@ -18,141 +22,6 @@ State Driver::send()
     }
     this->lastStatus = this->rxBuffer[0];
     return State(this->lastStatus);
-}
-
-/********************************************************************
- *	volatile unsigned *mmapGpio::mapRegAddr(unsigned long baseAddr)
- * This function maps a block of physical memory into the memory of
- * the calling process. It enables a user space process to access
- * registers in physical memory directly without having to interact
- * with in kernel side code i.e. device drivers
- *
- * Parameter - baseAddr (unsigned long) - this is the base address of
- * a block of physical memory that will be mapped into the userspace
- * process memory.
- *******************************************************************/
-volatile unsigned int *Driver::mapRegAddr(unsigned long baseAddr)
-{
-    int mem_fd = 0;
-    void *regAddrMap = MAP_FAILED;
-
-    /* open /dev/mem.....need to run program as root i.e. use sudo or su */
-    if (!mem_fd) {
-        if ((mem_fd = open("/dev/mem", O_RDWR|O_SYNC) ) < 0) {
-            perror("can't open /dev/mem");
-            exit (1);
-        }
-    }
-
-    /* mmap IO */
-    regAddrMap = mmap(
-        NULL,             //Any adddress in our space will do
-        GPIO_LEN,       //Map length
-        PROT_READ|PROT_WRITE|PROT_EXEC,// Enable reading & writting to mapped memory
-        MAP_SHARED/*|MAP_LOCKED*/,       //Shared with other processes
-        mem_fd,           //File to map
-        baseAddr         //Offset to base address
-    );
-
-    if (regAddrMap == MAP_FAILED) {
-        perror("mmap error");
-        close(mem_fd);
-        exit (1);
-    }
-
-    if(close(mem_fd) < 0){ //No need to keep mem_fd open after mmap
-                           //i.e. we can close /dev/mem
-        perror("couldn't close /dev/mem file descriptor");
-        exit(1);
-    }
-    return (volatile unsigned *)regAddrMap;
-}
-
-/*******************************************************************
- * setPinDir() - sets the direction of a pin to either input or
- * output
- *
- * Parameters - pinnum - GPIO pin number as per the RPI's  BCM2835's
- *                       standard definition
- *              dirOutput - pin direction can be false for input
- *                          or true for output
- * Return Value - None
- * *****************************************************************/
-void Driver::setPinDirection(const unsigned int pinnum, const bool dirOutput)
-{
-    if (dirOutput) {
-        switch(pinnum/10) {
-            case 0:
-                *(this->gpio + GPFSEL0) &= ~(7<<(((pinnum)%10)*3));
-                *(this->gpio + GPFSEL0) |=  (1<<(((pinnum)%10)*3));
-                break;
-            case 1:
-                *(this->gpio + GPFSEL1) &= ~(7<<(((pinnum)%10)*3));
-                *(this->gpio + GPFSEL1) |=  (1<<(((pinnum)%10)*3));
-                break;
-            case 2:
-                *(this->gpio + GPFSEL2) &= ~(7<<(((pinnum)%10)*3));
-                *(this->gpio + GPFSEL2) |=  (1<<(((pinnum)%10)*3));
-                break;
-            case 3:
-                *(this->gpio + GPFSEL3) &= ~(7<<(((pinnum)%10)*3));
-                *(this->gpio + GPFSEL3) |=  (1<<(((pinnum)%10)*3));
-                break;
-            default:
-                break;
-        }
-
-    } else {
-        switch(pinnum/10) {
-            case 0:
-                *(this->gpio + GPFSEL0) &= ~(7<<(((pinnum)%10)*3));
-                break;
-            case 1:
-                *(this->gpio + GPFSEL1) &= ~(7<<(((pinnum)%10)*3));
-                break;
-            case 2:
-                *(this->gpio + GPFSEL2) &= ~(7<<(((pinnum)%10)*3));
-                break;
-            case 3:
-                *(this->gpio + GPFSEL3) &= ~(7<<(((pinnum)%10)*3));
-                break;
-            default:
-                break;
-        }
-    }
-}
-
-/*******************************************************************
- * readPin() - reads the state of a GPIO pin and returns its value
- *
- * Parameter - pinnum - the pin number of the GPIO to read
- *
- * return Value - pin value. Either 1 (mmapGpio::HIGH) if pin state
- *                is high or 0 (mmapGpio::LOW) if pin is low
- * ****************************************************************/
-bool Driver::readPin(const unsigned int pinnum)
-{
-    return ((*(this->gpio + GPFLEV0) & (1 << pinnum)) != 0);
-}
-
-/*******************************************************************
- * writePinState() - sets (to 1) or clears (to 0) the state of an
- * output GPIO. This function has no effect on input GPIOs.
- * For faster output GPIO pin setting/clearing use inline functions
- * 'writePinHigh()' & 'writePinLow()' defined in the header file
- *
- * Parameters - pinnum - GPIO number as per RPI and BCM2835
- *                       standard definition
- *              pinstate - value to write to output pin...either
- *              true for setting or false for clearing
- * Return Value - None
- * ****************************************************************/
-void Driver::writePinState(const unsigned int pinnum, const bool pinstate)
-{
-    if (pinstate)
-        *(this->gpio + GPFSET0) = (1 << pinnum);
-    else
-        *(this->gpio + GPFCLR0) = (1 << pinnum);
 }
 
 Driver::Driver(const char* SPIFileName, ReceiveCallback *receiveCallback, SentCallback *sentCallback) :
@@ -219,18 +88,31 @@ Driver::Driver(const char* SPIFileName, ReceiveCallback *receiveCallback, SentCa
     this->receiveCallback = receiveCallback;
     this->sentCallback = sentCallback;
 
-    // setup gpio
-    this->gpio = mapRegAddr(GPIO_BASE);
+    // setup gpio (from py_pgio.c)
+    for (i=0; i<=MAXGPIOCOUNT; i++)  //odroid patch
+        gpio_direction[i] = -1;
+    if (get_rpi_info(&rpiinfo)) {
+        throw std::runtime_error("Driver::Driver gpio init: unsupported platform detected");
+    }
+    if (strstr(rpiinfo.type, "ODROID")) {
+        setMappingPtrsOdroid();
+    } else {
+        bcm_to_odroidgpio = &bcmToOGpioRPi;  //1:1 mapping
+        if (rpiinfo.p1_revision == 1) {
+            pin_to_gpio = &pin_to_gpio_rev1;
+        } else if (rpiinfo.p1_revision == 2) {
+            pin_to_gpio = &pin_to_gpio_rev2;
+        } else { // assume model B+ or A+ or 2B
+            pin_to_gpio = &pin_to_gpio_rev3;
+        }
+    }
 }
 
 Driver::~Driver()
 {
     close(this->fileDescriptor);
-    //unmap GPIO registers (physicalmemory)  from process memoy
-    if(munmap((void*)gpio, GPIO_LEN) < 0){
-        perror("munmap (gpio) failed");
-        exit(1);
-    }
+    // close gpio
+    cleanup();
 }
 
 void Driver::activateCE()

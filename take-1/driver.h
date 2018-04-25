@@ -5,18 +5,25 @@
 #include <string>
 #include <linux/spi/spidev.h>
 
-// gpio registers base address
-#define GPIO_BASE 0x20200000
-// need only map B4 registers
-#define GPIO_LEN 0xB4
-//gpio registers
-#define GPFSET0 7
-#define GPFCLR0 10
-#define GPFLEV0 13
-#define GPFSEL0 0
-#define GPFSEL1 1
-#define GPFSEL2 2
-#define GPFSEL3 3
+#include "gpio/source/cpuinfo.h"
+
+#define MODE_UNKNOWN -1
+#define BOARD        10
+#define BCM          11
+#define SERIAL       40
+#define SPI          41
+#define I2C          42
+#define PWM          43
+
+int gpio_mode;
+#define MAXPINCOUNT 40  //odroid added
+const int pin_to_gpio_rev1[MAXPINCOUNT+1];
+const int pin_to_gpio_rev2[MAXPINCOUNT+1];
+const int pin_to_gpio_rev3[MAXPINCOUNT+1];
+const int (*pin_to_gpio)[MAXPINCOUNT+1];
+#define MAXGPIOCOUNT 255  //odroid added
+int gpio_direction[MAXGPIOCOUNT+1];  //odroid change 54->255 to accommodate XU4 gpio numbers as index
+rpi_info rpiinfo;
 
 class Driver;
 using namespace std;
@@ -59,14 +66,6 @@ class Driver
     SentCallback *sentCallback;
 
     State send();
-    // gpio stuff
-    volatile unsigned int *gpio;
-    volatile unsigned int *mapRegAddr(unsigned long baseAddr); //performs mmaping into '/dev/mem'
-    void setPinDirection(const unsigned int pinnum, const bool dirOutput);
-    bool readPin(const unsigned int pinnum);
-    void writePinState(const unsigned int pinnum, const bool pinstate);
-        void inline writePinHigh(unsigned int pinnum){*(this->gpio + GPFSET0) = (1 << pinnum);}
-        void inline writePinLow(unsigned int pinnum){*(this->gpio + GPFCLR0) = (1 << pinnum);}
 public:
     Driver(const char *SPIFileName, ReceiveCallback *receiveCallback, SentCallback *sentCallback);
     ~Driver();
