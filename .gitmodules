@@ -1,0 +1,3 @@
+[submodule "take-1/gpio"]
+	path = take-1/gpio
+	url = https://github.com/JSkrat/RPi.GPIO-Odroid.git
