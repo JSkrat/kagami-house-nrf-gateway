@@ -1,3 +1,6 @@
 [submodule "take-1/gpio"]
 	path = take-1/gpio
 	url = https://github.com/JSkrat/RPi.GPIO-Odroid.git
+[submodule "take-2/scgi-c-library"]
+	path = take-2/scgi-c-library
+	url = https://github.com/semitrivial/scgi-c-library.git
