@@ -33,7 +33,12 @@ void handler() {
 
     if (rx) {
         // answer received
-
+        payloadLength = 0;
+        while (radio.available()) {
+            // read one byte to count the payload size
+            radio.read(&(payload[payloadLength]), 1);
+            payloadLength++;
+        }
     } else if (tx_ok) {
         // request sent
         statusCode = 204;
