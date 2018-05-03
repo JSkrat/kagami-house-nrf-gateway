@@ -4,6 +4,8 @@ extern "C" {
 #include "../scgi-c-library/scgilib.h"
 }
 #include "functions.h"
+#include <inttypes.h>
+#include <string>
 
 using namespace std;
 
@@ -18,11 +20,29 @@ RF24 radio(2, 10);
 
 uint8_t deviceAddress[6];
 
+std::string status;
+int rfLevel, statusCode;
+uint8_t payload[32];
+uint8_t payloadLength;
+
+
 void handler() {
     bool tx_ok, tx_fail, rx;
+    // this is resetting the irq flags along
     radio.whatHappened(tx_ok, tx_fail, rx);
 
+    if (rx) {
+        // answer received
 
+    } else if (tx_ok) {
+        // request sent
+        statusCode = 204;
+        status = "WIP: packet sent, ack received, waiting for the reply";
+    } else if (tx_fail) {
+        // no ack received
+        statusCode = 203;
+        status = "error: no ack";
+    }
 }
 
 void initRadio() {
@@ -76,30 +96,48 @@ int main()
             // send radio request here, wait for the response, then serialize it and put it into an answer
             // and we can't do anything during that, because we have only one transmitter
 
-            std::string status, rfLevel, payload;
-            int statusCode = 0;
+            status = ""; statusCode = 0;
+            rfLevel = -1; payloadLength = 0;
             // parse arguments
             printf("query string <%s>\n", req->query_string);
             tArguments arguments = parseQueryString(req->query_string);
-            rfLevel = "0";
             if (! arguments.errorCode) {
                 radio.openWritingPipe(*(reinterpret_cast<uint64_t*>(arguments.address)));
-                status = 'error: no ack';
+                status = "error: was no ack - you shouldn't see that";
+                statusCode = 201;
                 if (radio.write(arguments.payload, arguments.payloadLength)) {
-                    status = 'error: no response';
+                    status = "error: no interrupts from the transmitter came";
+                    statusCode = 202;
+                    // listen for the manual response here (not ack!)
+                    radio.startListening();
+                    /// @TODO redo that with something like mutex to reduce cpu consumption
+                    // waiting 2ms for interrupt to come and change the statusCode
+                    int timeout = 0;
+                    while (202 == statusCode && timeout++ < 4) {
+                        usleep(500);
+                    }
+                    // that's all --- send what irq function prepared
                 }
 
-                payload = reinterpret_cast<char*>(arguments.payload);
+                //payload = reinterpret_cast<char*>(arguments.payload);
             } else {
                 status = "error: bad arguments " + std::to_string(arguments.errorCode);
+                statusCode = 100 + arguments.errorCode;
             }
 
+            // serialize payload
+            std::string payloadStr = "";
+            for (int i = 0; i < payloadLength; i++) {
+                const char alph[] = {"0123456789ABCDEF"};
+                payloadStr += alph[payload[i] >> 4];
+                payloadStr += alph[payload[i] & 0x0F];
+            }
             std::string response = "Status: 200 OK\r\n"
                        "Content-Type: application/json\r\n\r\n"
                     "{\"status\":" + std::to_string(statusCode) + ""
                     ",\"statusText\":\"" + status + "\""
-                    ",\"rf-level\":\"" + rfLevel + "\""
-                    ",\"data\":\"" + payload + "\"}"
+                    ",\"rf-level\":" + std::to_string(rfLevel) + ""
+                    ",\"data\":\"" + payloadStr + "\"}"
                     ;
             if (! scgi_write(req, const_cast<char*>(response.c_str()))) {
                 std::cerr << "SCGI response could not be sent, probably not enough RAM\n";
