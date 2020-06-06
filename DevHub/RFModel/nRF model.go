@@ -27,16 +27,24 @@ func Init() {
 	defer p.Close()
 
 	// Convert the spi.Port into a spi.Conn so it can be used for communication.
-	c, err := p.Connect(physic.MegaHertz, spi.Mode3, 8)
+	c, err := p.Connect(10 * physic.MegaHertz, spi.Mode0, 8)
 	if err != nil {
 		log.Fatal(err)
 	}
 
+	write := []byte{0xFF, 0x00}
+	read := make([]byte, len(write))
+
+	if err := c.Tx(write, read); err != nil {
+		log.Fatal(err)
+	}
+
 	// Prints out the gpio pin used.
-	if p, ok := c.(spi.Pins); ok {
+	/*if p, ok := c.(spi.Pins); ok {
 		fmt.Printf("  CLK : %s", p.CLK())
 		fmt.Printf("  MOSI: %s", p.MOSI())
 		fmt.Printf("  MISO: %s", p.MISO())
 		fmt.Printf("  CS  : %s", p.CS())
-	}
+	}*/
+	fmt.Printf("%v\n", read[0:])
 }
