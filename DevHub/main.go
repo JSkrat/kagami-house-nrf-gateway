@@ -1,7 +1,9 @@
 package main
 
-import "fmt"
+import (
+	"./RFModel"
+)
 
 func main() {
-	fmt.Println("Lucky pony")
+	nRF_model.Init()
 }
