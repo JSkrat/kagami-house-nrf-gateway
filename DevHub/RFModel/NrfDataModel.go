@@ -1,6 +1,22 @@
 package nRF_model
 
 type Address [5]byte
+type Payload []byte
+type Message struct {
+	address Address
+	payload Payload
+	pipe    byte
+	status  EMessageStatus
+}
+
+type EMessageStatus byte
+
+const (
+	EMSNone        EMessageStatus = 0x00
+	EMSTransmitted                = 0x10
+	EMSReceived                   = 0x11
+	EMSNoAck                      = 0x80
+)
 
 // NRF-related stuff
 type Command byte
@@ -69,7 +85,7 @@ const (
 	BMaxRt                 = 4
 	BRxPNo                 = 1
 	BStatusTxFull          = 0
-	BRxNoMask     byte     = 0x0E
+	BRxPNoMask    byte     = 0x0E
 
 	RObserveTx Register = 0x08
 	BPLosCnt   Bit      = 4
