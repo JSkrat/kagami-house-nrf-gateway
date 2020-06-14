@@ -6,12 +6,22 @@ import (
 	"periph.io/x/periph/conn/spi"
 	"periph.io/x/periph/conn/spi/spireg"
 	"periph.io/x/periph/host"
+	"time"
 )
 
 type NRFTransmitter struct {
 	port       spi.PortCloser
 	connection spi.Conn
 	status     uint8
+	channel    uint8
+}
+
+func BV(b Bit) byte {
+	return 1 << byte(b)
+}
+
+func setCE(rf *NRFTransmitter, value bool) {
+
 }
 
 /**
@@ -39,6 +49,17 @@ func ReadRegister(rf *NRFTransmitter, register Register) []byte {
 	return sendCommand(rf, Command(byte(CReadRegister)|byte(register)), make([]byte, registerLengths[register]))
 }
 
+func WriteRegister(rf *NRFTransmitter, r Register, data []byte) {
+	if len(data) > int(registerLengths[r]) {
+		panic(errors.New("data is bigger than register size"))
+	}
+	sendCommand(rf, Command(byte(CWriteRegister)|byte(r)), data)
+}
+
+func WriteByteRegister(rf *NRFTransmitter, r Register, data byte) {
+	WriteRegister(rf, r, []byte{data})
+}
+
 func Open(rf *NRFTransmitter) {
 	// Make sure periph is initialized.
 	if _, err := host.Init(); err != nil {
@@ -56,13 +77,68 @@ func Open(rf *NRFTransmitter) {
 		panic(errors.New("port.Connect: " + err.Error()))
 	}
 	(*rf).connection = connection
-	initNRF()
+	initNRF(rf)
 }
 
-func initNRF() {
-
+func initNRF(rf *NRFTransmitter) {
+	// we do not use nrf pipes 2-5
+	setCE(rf, false)
+	sendCommand(rf, CFlushRx, []byte{})
+	sendCommand(rf, CFlushTx, []byte{})
+	// clear all interrupts
+	WriteByteRegister(rf, RStatus, BV(BRxDr)|BV(BTxDs)|BV(BMaxRt))
+	WriteByteRegister(rf, RConfig, BV(BEnCrc)|BV(BCrcO)|BV(BPwrUp)|BV(BPrimRx))
+	// disable auto ack
+	WriteByteRegister(rf, REnAA, 0)
+	WriteByteRegister(rf, RDynPd, BV(BDplP0)|BV(BDplP1))
+	WriteByteRegister(rf, RFeature, BV(BEnDpl))
+	WriteByteRegister(rf, REnRxAddr, BV(BEnRxP0))
+	// 1Mbps, max power
+	WriteByteRegister(rf, RRFSetup, 3<<byte(BRfPwr))
 }
 
 func Close(rf *NRFTransmitter) {
-	rf.port.Close()
+	_ = rf.port.Close()
+}
+
+func Listen(rf *NRFTransmitter, address Address) {
+	var config = ReadRegister(rf, RConfig)
+	config[0] |= BV(BPrimRx)
+	WriteRegister(rf, RConfig, config)
+	WriteRegister(rf, RRxAddrP0, address[:])
+	setCE(rf, true)
+}
+
+func Transmit(rf *NRFTransmitter, a Address, data []byte) {
+	if 32 < len(data) {
+		panic(errors.New("too big payload, " + string(len(data))))
+	}
+	// without a CE changing from low to high transmission won't start
+	setCE(rf, false)
+	time.Sleep(10 * time.Microsecond)
+	// clear interrupts
+	WriteByteRegister(rf, RStatus, BV(BTxDs)|BV(BMaxRt))
+	WriteRegister(rf, RTxAddr, a[:])
+	WriteRegister(rf, RRxAddrP0, a[:])
+	sendCommand(rf, CWriteTxPayload, data)
+	var config = ReadRegister(rf, RConfig)
+	config[0] &^= BV(BPrimRx)
+	WriteRegister(rf, RConfig, config)
+	setCE(rf, true)
+}
+
+func GoIdle(rf *NRFTransmitter) {
+	setCE(rf, false)
+}
+
+func ValidateRfChannel(channel byte) bool {
+	return channel < 128
+}
+
+func SetRfChannel(rf *NRFTransmitter, channel byte) {
+	if !ValidateRfChannel(channel) {
+		panic(errors.New("incorrect channel " + string(channel)))
+	}
+	rf.channel = channel
+	WriteByteRegister(rf, RRFCh, channel)
 }

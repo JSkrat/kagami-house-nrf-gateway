@@ -1,5 +1,8 @@
 package nRF_model
 
+type Address [5]byte
+
+// NRF-related stuff
 type Command byte
 type Register byte
 type Bit byte
@@ -37,12 +40,12 @@ const (
 	BEnAAP0          = 0
 
 	REnRxAddr Register = 0x02
-	BERxP5    Bit      = 5
-	BERxP4             = 4
-	BERxP3             = 3
-	BERxP2             = 2
-	BERxP1             = 1
-	BERxP0             = 0
+	BEnRxP5   Bit      = 5
+	BEnRxP4            = 4
+	BEnRxP3            = 3
+	BEnRxP2            = 2
+	BEnRxP1            = 1
+	BEnRxP0            = 0
 
 	RSetupAW Register = 0x03
 	BAW      Bit      = 0
