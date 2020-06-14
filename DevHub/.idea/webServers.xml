@@ -1,0 +1,14 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<project version="4">
+  <component name="WebServers">
+    <option name="servers">
+      <webServer id="e4ba4eae-79e3-4863-9bbb-bccc354d3250" name="kagami">
+        <fileTransfer rootFolder="/home/mintytail" accessType="SFTP" host="192.168.88.235" port="22" sshConfigId="534271b8-7b4c-42af-a932-d5863ae95344" sshConfig="mintytail@192.168.88.235:22 password">
+          <advancedOptions>
+            <advancedOptions dataProtectionLevel="Private" keepAliveTimeout="0" passiveMode="true" shareSSLContext="true" />
+          </advancedOptions>
+        </fileTransfer>
+      </webServer>
+    </option>
+  </component>
+</project>

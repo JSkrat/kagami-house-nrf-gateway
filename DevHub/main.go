@@ -4,6 +4,9 @@ import (
 	"./RFModel"
 )
 
+var rf *nRF_model.NRFTransmitter
+
 func main() {
-	nRF_model.Init()
+	rf = new(nRF_model.NRFTransmitter)
+	nRF_model.Open(rf)
 }
