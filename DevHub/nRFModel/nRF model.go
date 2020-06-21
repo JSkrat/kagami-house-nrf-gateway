@@ -26,6 +26,12 @@ type NRFTransmitter struct {
 	mutex             sync.Mutex
 }
 
+type TransmitterSettings struct {
+	PortName string
+	IrqName  string
+	CEName   string
+}
+
 func BV(b Bit) byte {
 	return 1 << byte(b)
 }
@@ -80,7 +86,8 @@ func getPipeNumberReceived(rf *NRFTransmitter) byte {
 	return ret
 }
 
-func Open(rf *NRFTransmitter, portName string, ceName string, irqName string) {
+func OpenTransmitter(settings TransmitterSettings) NRFTransmitter {
+	rf := NRFTransmitter{}
 	rf.mutex.Lock()
 	defer rf.mutex.Unlock()
 	// Make sure periphery is initialized.
@@ -88,31 +95,32 @@ func Open(rf *NRFTransmitter, portName string, ceName string, irqName string) {
 		panic(errors.New("host.Init: " + err.Error()))
 	}
 	// Use SPI port registry to find the first available SPI bus.
-	port, err := spireg.Open(portName)
+	port, err := spireg.Open(settings.PortName)
 	if err != nil {
-		panic(errors.New("spireg.Open of port " + portName + ": " + err.Error()))
+		panic(errors.New("spireg.Open of port " + settings.PortName + ": " + err.Error()))
 	}
-	(*rf).port = port
+	rf.port = port
 	// Convert the spi.Port into a spi.Conn so it can be used for communication.
-	connection, err := (*rf).port.Connect(10*physic.MegaHertz, spi.Mode0, 8)
+	connection, err := rf.port.Connect(10*physic.MegaHertz, spi.Mode0, 8)
 	if err != nil {
 		panic(errors.New("port.Connect: " + err.Error()))
 	}
-	(*rf).connection = connection
+	rf.connection = connection
 	// now gpio
-	rf.ce = gpioreg.ByName(ceName)
+	rf.ce = gpioreg.ByName(settings.CEName)
 	if nil == rf.ce {
-		panic(errors.New("ce pin <" + ceName + "> was not initialized"))
+		panic(errors.New("ce pin <" + settings.CEName + "> was not initialized"))
 	}
-	rf.irq = gpioreg.ByName(irqName)
+	rf.irq = gpioreg.ByName(settings.IrqName)
 	if nil == rf.irq {
-		panic(errors.New("irq pin <" + irqName + "> was not initialized"))
+		panic(errors.New("irq pin <" + settings.IrqName + "> was not initialized"))
 	}
 	if err := rf.irq.In(gpio.PullNoChange, gpio.RisingEdge); err != nil {
 		panic(errors.New("PinIn.In: " + err.Error()))
 	}
-	initNRF(rf)
-	go run(rf)
+	initNRF(&rf)
+	go run(&rf)
+	return rf
 }
 
 func initNRF(rf *NRFTransmitter) {
@@ -132,7 +140,7 @@ func initNRF(rf *NRFTransmitter) {
 	writeByteRegister(rf, RRFSetup, 0x03<<byte(BRfPwr))
 }
 
-func Close(rf *NRFTransmitter) {
+func CloseTransmitter(rf *NRFTransmitter) {
 	_ = rf.port.Close()
 }
 

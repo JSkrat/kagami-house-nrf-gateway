@@ -2,13 +2,15 @@ package main
 
 import (
 	"./RFModel"
+	"./nRFModel"
 )
 
-var rf *nRF_model.NRFTransmitter
-
 func main() {
-	rf = new(nRF_model.NRFTransmitter)
-	nRF_model.Open(rf, "", "2", "7")
-	defer nRF_model.Close(rf)
+	model := RFModel.Init(nRF_model.TransmitterSettings{
+		PortName: "",
+		IrqName:  "2",
+		CEName:   "7",
+	})
+	defer RFModel.Close(&model)
 
 }
