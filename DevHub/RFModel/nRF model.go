@@ -9,19 +9,21 @@ import (
 	"periph.io/x/periph/conn/spi"
 	"periph.io/x/periph/conn/spi/spireg"
 	"periph.io/x/periph/host"
+	"sync"
 	"time"
 )
 
 type NRFTransmitter struct {
-	port              spi.PortCloser
-	connection        spi.Conn
-	status            uint8
-	channel           uint8
-	ce                gpio.PinOut
-	irq               gpio.PinIn
-	ReceiveMessage    chan Message
-	SendMessage       chan Message
+	port           spi.PortCloser
+	connection     spi.Conn
+	status         uint8
+	channel        uint8
+	ce             gpio.PinOut
+	irq            gpio.PinIn
+	ReceiveMessage chan Message
+	//SendMessage       chan Message
 	SendMessageStatus chan Message
+	mutex             sync.Mutex
 }
 
 func BV(b Bit) byte {
@@ -55,22 +57,22 @@ func sendCommand(rf *NRFTransmitter, command Command, data []byte) []byte {
 	return read[1:]
 }
 
-func ReadRegister(rf *NRFTransmitter, register Register) []byte {
+func readRegister(rf *NRFTransmitter, register Register) []byte {
 	return sendCommand(rf, Command(byte(CReadRegister)|byte(register)), make([]byte, registerLengths[register]))
 }
 
-func WriteRegister(rf *NRFTransmitter, r Register, data []byte) {
+func writeRegister(rf *NRFTransmitter, r Register, data []byte) {
 	if len(data) > int(registerLengths[r]) {
 		panic(errors.New("data is bigger than register size"))
 	}
 	sendCommand(rf, Command(byte(CWriteRegister)|byte(r)), data)
 }
 
-func WriteByteRegister(rf *NRFTransmitter, r Register, data byte) {
-	WriteRegister(rf, r, []byte{data})
+func writeByteRegister(rf *NRFTransmitter, r Register, data byte) {
+	writeRegister(rf, r, []byte{data})
 }
 
-func GetPipeNumberReceived(rf *NRFTransmitter) byte {
+func getPipeNumberReceived(rf *NRFTransmitter) byte {
 	ret := (rf.status & BRxPNoMask) >> BRxPNo
 	if 7 == ret {
 		panic(errors.New("RX FIFO empty"))
@@ -79,6 +81,8 @@ func GetPipeNumberReceived(rf *NRFTransmitter) byte {
 }
 
 func Open(rf *NRFTransmitter, portName string, ceName string, irqName string) {
+	rf.mutex.Lock()
+	defer rf.mutex.Unlock()
 	// Make sure periphery is initialized.
 	if _, err := host.Init(); err != nil {
 		panic(errors.New("host.Init: " + err.Error()))
@@ -117,15 +121,15 @@ func initNRF(rf *NRFTransmitter) {
 	sendCommand(rf, CFlushRx, []byte{})
 	sendCommand(rf, CFlushTx, []byte{})
 	// clear all interrupts
-	WriteByteRegister(rf, RStatus, BV(BRxDr)|BV(BTxDs)|BV(BMaxRt))
-	WriteByteRegister(rf, RConfig, BV(BEnCrc)|BV(BCrcO)|BV(BPwrUp)|BV(BPrimRx))
+	writeByteRegister(rf, RStatus, BV(BRxDr)|BV(BTxDs)|BV(BMaxRt))
+	writeByteRegister(rf, RConfig, BV(BEnCrc)|BV(BCrcO)|BV(BPwrUp)|BV(BPrimRx))
 	// disable auto ack
-	WriteByteRegister(rf, REnAA, 0)
-	WriteByteRegister(rf, RDynPd, BV(BDplP0)|BV(BDplP1))
-	WriteByteRegister(rf, RFeature, BV(BEnDpl))
-	WriteByteRegister(rf, REnRxAddr, BV(BEnRxP0))
+	writeByteRegister(rf, REnAA, 0)
+	writeByteRegister(rf, RDynPd, BV(BDplP0)|BV(BDplP1))
+	writeByteRegister(rf, RFeature, BV(BEnDpl))
+	writeByteRegister(rf, REnRxAddr, BV(BEnRxP0))
 	// 1Mbps, max power
-	WriteByteRegister(rf, RRFSetup, 0x03<<byte(BRfPwr))
+	writeByteRegister(rf, RRFSetup, 0x03<<byte(BRfPwr))
 }
 
 func Close(rf *NRFTransmitter) {
@@ -147,8 +151,8 @@ func receiveMessages(rf *NRFTransmitter) {
 	for {
 		var m Message
 		m.status = EMSReceived
-		m.pipe = GetPipeNumberReceived(rf) // if no messages that will panic
-		WriteByteRegister(rf, RStatus, BV(BRxDr))
+		m.pipe = getPipeNumberReceived(rf) // if no messages that will panic
+		writeByteRegister(rf, RStatus, BV(BRxDr))
 		// get payload
 		payloadLength := sendCommand(rf, CReadRxPayloadWidth, []byte{})[0]
 		if 0 == payloadLength {
@@ -158,11 +162,11 @@ func receiveMessages(rf *NRFTransmitter) {
 		}
 		// get address
 		if 0 == m.pipe {
-			copy(m.address[:], ReadRegister(rf, RRxAddrP0))
+			copy(m.address[:], readRegister(rf, RRxAddrP0))
 		} else {
-			copy(m.address[:], ReadRegister(rf, RRxAddrP1))
+			copy(m.address[:], readRegister(rf, RRxAddrP1))
 			if 1 < m.pipe {
-				m.address[len(m.address)-1] = ReadRegister(rf, Register(RRxAddrP2-2+m.pipe))[0]
+				m.address[len(m.address)-1] = readRegister(rf, Register(RRxAddrP2-2+m.pipe))[0]
 			}
 		}
 		if nil != rf.ReceiveMessage {
@@ -177,6 +181,7 @@ func run(rf *NRFTransmitter) {
 	// The IRQ pin is activated then TX_DS IRQ, RX_DR IRQ os MAX_RT IRQ are set high
 	// by the state machine in the STATUS register
 	for rf.irq.WaitForEdge(-1) {
+		rf.mutex.Lock()
 		logrus.Info("IRQ happened")
 		//fmt.Println("IRQ happened")
 		setCE(rf, false)
@@ -186,40 +191,45 @@ func run(rf *NRFTransmitter) {
 		if 0 != rf.status&BV(BTxDs) {
 			// Data Sent Tx FIFO interrupt. Asserted when the packet is transmitter on TX.
 			// If AUTO_ACK is activates, this bit is set high only when ACK is received.
-			copy(m.address[:], ReadRegister(rf, RTxAddr))
+			copy(m.address[:], readRegister(rf, RTxAddr))
 			m.status = EMSTransmitted
 			// reset the flag
-			WriteByteRegister(rf, RStatus, BV(BTxDs))
+			writeByteRegister(rf, RStatus, BV(BTxDs))
 			if nil != rf.SendMessageStatus {
 				rf.SendMessageStatus <- m
 			}
 		} else if 0 != rf.status&BV(BMaxRt) {
 			// Maximum number of TX retransmits interrupt
 			// If MAX_RT is asserted, it must be cleared to enable further communication.
-			copy(m.address[:], ReadRegister(rf, RTxAddr))
+			copy(m.address[:], readRegister(rf, RTxAddr))
 			m.status = EMSNoAck
 			// TX FIFO does not pop failed element. If we won't clean it, it will be re-sent again.
 			sendCommand(rf, CFlushTx, []byte{})
 			// reset the flag
-			WriteByteRegister(rf, RStatus, BV(BMaxRt))
+			writeByteRegister(rf, RStatus, BV(BMaxRt))
 			if nil != rf.SendMessageStatus {
 				rf.SendMessageStatus <- m
 			}
 		} else if 0 != rf.status&BV(BRxDr) {
 			receiveMessages(rf)
 		}
+		rf.mutex.Unlock()
 	}
 }
 
 func Listen(rf *NRFTransmitter, address Address) {
-	var config = ReadRegister(rf, RConfig)
+	rf.mutex.Lock()
+	defer rf.mutex.Unlock()
+	var config = readRegister(rf, RConfig)
 	config[0] |= BV(BPrimRx)
-	WriteRegister(rf, RConfig, config)
-	WriteRegister(rf, RRxAddrP0, address[:])
+	writeRegister(rf, RConfig, config)
+	writeRegister(rf, RRxAddrP0, address[:])
 	setCE(rf, true)
 }
 
 func Transmit(rf *NRFTransmitter, a Address, data Payload) {
+	rf.mutex.Lock()
+	defer rf.mutex.Unlock()
 	if 32 < len(data) {
 		panic(errors.New("too big payload, " + string(len(data))))
 	}
@@ -227,17 +237,19 @@ func Transmit(rf *NRFTransmitter, a Address, data Payload) {
 	setCE(rf, false)
 	time.Sleep(10 * time.Microsecond)
 	// clear interrupts
-	WriteByteRegister(rf, RStatus, BV(BTxDs)|BV(BMaxRt))
-	WriteRegister(rf, RTxAddr, a[:])
-	WriteRegister(rf, RRxAddrP0, a[:])
+	writeByteRegister(rf, RStatus, BV(BTxDs)|BV(BMaxRt))
+	writeRegister(rf, RTxAddr, a[:])
+	writeRegister(rf, RRxAddrP0, a[:])
 	sendCommand(rf, CWriteTxPayload, data)
-	var config = ReadRegister(rf, RConfig)
+	var config = readRegister(rf, RConfig)
 	config[0] &^= BV(BPrimRx)
-	WriteRegister(rf, RConfig, config)
+	writeRegister(rf, RConfig, config)
 	setCE(rf, true)
 }
 
 func GoIdle(rf *NRFTransmitter) {
+	rf.mutex.Lock()
+	defer rf.mutex.Unlock()
 	setCE(rf, false)
 }
 
@@ -246,9 +258,11 @@ func ValidateRfChannel(channel byte) bool {
 }
 
 func SetRfChannel(rf *NRFTransmitter, channel byte) {
+	rf.mutex.Lock()
+	defer rf.mutex.Unlock()
 	if !ValidateRfChannel(channel) {
 		panic(errors.New("incorrect channel " + string(channel)))
 	}
 	rf.channel = channel
-	WriteByteRegister(rf, RRFCh, channel)
+	writeByteRegister(rf, RRFCh, channel)
 }
