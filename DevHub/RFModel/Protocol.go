@@ -1,10 +1,12 @@
 package RFModel
 
 import (
+	"../nRFModel"
 	"bytes"
 	"encoding/binary"
 	"errors"
 	"fmt"
+	"time"
 )
 
 const (
@@ -14,8 +16,6 @@ const (
 	MaxDataLengthRq    uint = PacketLength - RequestHeaderSize
 	MaxDataLengthRs    uint = PacketLength - ResponseHeaderSize
 )
-
-type packet []byte
 
 type request struct {
 	Version       byte
@@ -34,11 +34,45 @@ type response struct {
 	DataLength    byte
 }
 
-type Payload interface {
-	Payload() []byte
-}
+type EDataType byte
 
-func makeRequest(rq request) packet {
+const (
+	EDNone        EDataType = 0
+	EDBool                  = 1
+	EDByte                  = 2
+	EDInt32                 = 3
+	EDString                = 4
+	EDByteArray             = 5
+	EDUnspecified           = 0xF
+)
+
+type FuncNo byte
+
+const (
+	// unit 0, global device functions
+	F0SetNewSessionKey         FuncNo = 0
+	F0GetNumberOfInternalUnits        = 1
+	F0SetMACAddress                   = 2
+	F0SetRFChannel                    = 6
+	F0GetDeviceStatistics             = 3
+	F0NOP                             = 5
+	F0ResetTransactionId              = 4
+	F0SetSlaveMode                    = 7
+	// per unit functions
+	FGetListOfUnitFunctions = 0
+	FGetTextDescription     = 1
+	FSetTextDescription     = 2
+)
+
+type PacketValidationError error
+
+/*type Payload interface {
+	Payload() []byte
+}*/
+
+var transactionId byte = 0
+
+func serializeRequest(rq *request) nRF_model.Payload {
 	if MaxDataLengthRq < uint(rq.DataLength) {
 		panic(errors.New(fmt.Sprintf("too big DataLength %v", rq.DataLength)))
 	}
@@ -49,18 +83,18 @@ func makeRequest(rq request) packet {
 	return buf.Bytes()[:PacketLength-MaxDataLengthRq+uint(rq.DataLength)]
 }
 
-func parseResponse(r packet) response {
-	if PacketLength < uint(len(r)) {
-		panic(errors.New(fmt.Sprintf("too big packet of length %v", len(r))))
+func parseResponse(r *nRF_model.Payload) response {
+	if PacketLength < uint(len(*r)) {
+		panic(errors.New(fmt.Sprintf("too big packet of length %v", len(*r))))
 	}
 	var ret response
 	buf := bytes.Buffer{}
-	buf.Write(r)
-	buf.Write(make([]byte, int(PacketLength+1)-len(r)))
+	buf.Write(*r)
+	buf.Write(make([]byte, int(PacketLength+1)-len(*r)))
 	if err := binary.Read(&buf, binary.LittleEndian, &ret); err != nil {
 		panic(errors.New("binary.Read: " + err.Error()))
 	}
-	ret.DataLength = byte(len(r) - int(ResponseHeaderSize))
+	ret.DataLength = byte(len(*r) - int(ResponseHeaderSize))
 	return ret
 }
 
@@ -74,4 +108,57 @@ func (r response) Payload() []byte {
 	var ret []byte
 	copy(ret[:], r.Data[:r.DataLength])
 	return ret
+}
+
+func createRequest(unitID byte, functionId byte, data []byte) request {
+	defer func() { transactionId += 1 }()
+	var structData [MaxDataLengthRq]byte
+	copy(structData[:], data)
+	return request{
+		Version:       0,
+		TransactionID: transactionId,
+		UnitID:        unitID,
+		FunctionID:    functionId,
+		Data:          structData,
+		DataLength:    byte(len(data)),
+	}
+}
+
+func basicValidateResponse(r *response) bool {
+	if 0 != r.Version {
+		return false
+	}
+	if transactionId-1 != r.TransactionID {
+		return false
+	}
+	return true
+}
+
+// todo add several tries in case of fail here
+func callFunction(rf *RFModel, uid UID, fno FuncNo, payload nRF_model.Payload) nRF_model.Payload {
+	rq := createRequest(uid.unit, byte(fno), payload)
+	nRF_model.Transmit(&rf.transmitter, uid.address, serializeRequest(&rq))
+	// wait for transmission completes
+	<-rf.transmitter.SendMessageStatus // what could possibly go wrong here?)
+	nRF_model.Listen(&rf.transmitter, uid.address)
+	timeoutChan := make(chan bool)
+	go func() {
+		<-time.After(20 * time.Millisecond)
+		timeoutChan <- true
+	}()
+	for {
+		select {
+		case message := <-rf.transmitter.ReceiveMessage:
+			// message received
+			if pm, ok := validateResponse(&uid.address, &rq, &message); ok {
+				// now we have received, parsed and validated message from the device
+				if 0 != pm.Code {
+					panic(errors.New(fmt.Sprintf("error code %v", pm.Code)))
+				}
+				return pm.Payload()
+			}
+		case <-timeoutChan:
+			panic(errors.New("response timeout"))
+		}
+	}
 }
