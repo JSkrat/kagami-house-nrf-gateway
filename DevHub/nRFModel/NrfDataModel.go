@@ -3,10 +3,10 @@ package nRF_model
 type Address [5]byte
 type Payload []byte
 type Message struct {
-	address Address
-	payload Payload
+	Address Address
+	Payload Payload
 	pipe    byte
-	status  EMessageStatus
+	Status  EMessageStatus
 }
 
 type EMessageStatus byte

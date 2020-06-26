@@ -154,27 +154,28 @@ func receiveMessages(rf *NRFTransmitter) {
 	// 4) if there are more data in the RX FIFO, repeat from step 1)
 	defer func() {
 		// todo we need to distinguish what exactly panic happened
+		// here we should be catching getPipeNumberReceived panic only!
 		recover()
 	}()
 	for {
 		var m Message
-		m.status = EMSReceived
+		m.Status = EMSReceived
 		m.pipe = getPipeNumberReceived(rf) // if no messages that will panic
 		writeByteRegister(rf, RStatus, BV(BRxDr))
 		// get payload
 		payloadLength := sendCommand(rf, CReadRxPayloadWidth, []byte{})[0]
 		if 0 == payloadLength {
-			m.payload = Payload{}
+			m.Payload = Payload{}
 		} else {
-			m.payload = sendCommand(rf, CReadRxPayload, make([]byte, payloadLength))
+			m.Payload = sendCommand(rf, CReadRxPayload, make([]byte, payloadLength))
 		}
-		// get address
+		// get Address
 		if 0 == m.pipe {
-			copy(m.address[:], readRegister(rf, RRxAddrP0))
+			copy(m.Address[:], readRegister(rf, RRxAddrP0))
 		} else {
-			copy(m.address[:], readRegister(rf, RRxAddrP1))
+			copy(m.Address[:], readRegister(rf, RRxAddrP1))
 			if 1 < m.pipe {
-				m.address[len(m.address)-1] = readRegister(rf, Register(RRxAddrP2-2+m.pipe))[0]
+				m.Address[len(m.Address)-1] = readRegister(rf, Register(RRxAddrP2-2+m.pipe))[0]
 			}
 		}
 		if nil != rf.ReceiveMessage {
@@ -199,8 +200,8 @@ func run(rf *NRFTransmitter) {
 		if 0 != rf.status&BV(BTxDs) {
 			// Data Sent Tx FIFO interrupt. Asserted when the packet is transmitter on TX.
 			// If AUTO_ACK is activates, this bit is set high only when ACK is received.
-			copy(m.address[:], readRegister(rf, RTxAddr))
-			m.status = EMSTransmitted
+			copy(m.Address[:], readRegister(rf, RTxAddr))
+			m.Status = EMSTransmitted
 			// reset the flag
 			writeByteRegister(rf, RStatus, BV(BTxDs))
 			if nil != rf.SendMessageStatus {
@@ -209,8 +210,8 @@ func run(rf *NRFTransmitter) {
 		} else if 0 != rf.status&BV(BMaxRt) {
 			// Maximum number of TX retransmits interrupt
 			// If MAX_RT is asserted, it must be cleared to enable further communication.
-			copy(m.address[:], readRegister(rf, RTxAddr))
-			m.status = EMSNoAck
+			copy(m.Address[:], readRegister(rf, RTxAddr))
+			m.Status = EMSNoAck
 			// TX FIFO does not pop failed element. If we won't clean it, it will be re-sent again.
 			sendCommand(rf, CFlushTx, []byte{})
 			// reset the flag
