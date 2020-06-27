@@ -22,7 +22,7 @@ func TestBuildRequest(t *testing.T) {
 	pPacket := serializeRequest(&pStruct)
 	Assert(t, pStruct.Version == pPacket[0], "version does not equal")
 	Assert(t, pStruct.TransactionID == pPacket[1], "transaction id does not equal")
-	Assert(t, pStruct.UnitID == pPacket[2], "unit id does not equal")
+	Assert(t, pStruct.UnitID == pPacket[2], "Unit id does not equal")
 	Assert(t, pStruct.FunctionID == pPacket[3], "function id does not equal")
 	Assert(t, int(RequestHeaderSize) == len(pPacket), "packet length is not 4 as required for empty data")
 	// test data length

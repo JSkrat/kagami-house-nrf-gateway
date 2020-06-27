@@ -7,8 +7,8 @@ import (
 )
 
 type UID struct {
-	address nRF_model.Address
-	unit    byte
+	Address nRF_model.Address
+	Unit    byte
 }
 type Variant interface{}
 type RFModel struct {

@@ -52,10 +52,10 @@ func setCE(rf *NRFTransmitter, value bool) {
  * @param data length of data array determines how much bytes would be read and written
  */
 func sendCommand(rf *NRFTransmitter, command Command, data []byte) []byte {
-	var write = make([]byte, 1+len(data))
-	var read = make([]byte, len(write))
+	var write = make([]byte, 1)
 	write[0] = byte(command)
-	_ = append(write, data...)
+	write = append(write, data...)
+	var read = make([]byte, len(write))
 	if err := (*rf).connection.Tx(write, read); err != nil {
 		panic(errors.New("sendCommand.Tx: " + err.Error()))
 	}
@@ -101,21 +101,23 @@ func OpenTransmitter(settings TransmitterSettings) NRFTransmitter {
 	}
 	rf.port = port
 	// Convert the spi.Port into a spi.Conn so it can be used for communication.
-	connection, err := rf.port.Connect(10*physic.MegaHertz, spi.Mode0, 8)
+	connection, err := rf.port.Connect(1*physic.MegaHertz, spi.Mode0, 8)
 	if err != nil {
 		panic(errors.New("port.Connect: " + err.Error()))
 	}
 	rf.connection = connection
 	// now gpio
+	// CE (this signal is active high and used to activate the chip in RX or TX mode)
 	rf.ce = gpioreg.ByName(settings.CEName)
 	if nil == rf.ce {
 		panic(errors.New("ce pin <" + settings.CEName + "> was not initialized"))
 	}
+	// IRQ (this signal is active low and controlled by three maskable interrupt sources)
 	rf.irq = gpioreg.ByName(settings.IrqName)
 	if nil == rf.irq {
 		panic(errors.New("irq pin <" + settings.IrqName + "> was not initialized"))
 	}
-	if err := rf.irq.In(gpio.PullNoChange, gpio.RisingEdge); err != nil {
+	if err := rf.irq.In(gpio.PullNoChange, gpio.FallingEdge); err != nil {
 		panic(errors.New("PinIn.In: " + err.Error()))
 	}
 	initNRF(&rf)
