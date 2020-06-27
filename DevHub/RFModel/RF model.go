@@ -4,6 +4,8 @@ import (
 	"../nRFModel"
 	"errors"
 	"fmt"
+	"github.com/sirupsen/logrus"
+	"os"
 )
 
 type UID struct {
@@ -15,7 +17,16 @@ type RFModel struct {
 	transmitter nRF_model.NRFTransmitter
 }
 
+var log = logrus.New()
+
 func Init(settings nRF_model.TransmitterSettings) RFModel {
+	// logging
+	//log.Formatter = new(logrus.JSONFormatter)
+	log.Formatter = new(logrus.TextFormatter) //default
+	//log.Formatter.(*logrus.TextFormatter).DisableColors = true    // remove colors
+	//log.Formatter.(*logrus.TextFormatter).DisableTimestamp = true // remove timestamp from test output
+	log.Level = logrus.TraceLevel
+	log.Out = os.Stdout
 	rf := RFModel{}
 	rf.transmitter = nRF_model.OpenTransmitter(settings)
 	rf.transmitter.SendMessageStatus = make(chan nRF_model.Message)

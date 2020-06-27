@@ -2,7 +2,9 @@ package nRF_model
 
 import (
 	"errors"
+	"fmt"
 	"github.com/sirupsen/logrus"
+	"os"
 	"periph.io/x/periph/conn/gpio"
 	"periph.io/x/periph/conn/gpio/gpioreg"
 	"periph.io/x/periph/conn/physic"
@@ -12,6 +14,8 @@ import (
 	"sync"
 	"time"
 )
+
+var log = logrus.New()
 
 type NRFTransmitter struct {
 	port           spi.PortCloser
@@ -37,6 +41,7 @@ func BV(b Bit) byte {
 }
 
 func setCE(rf *NRFTransmitter, value bool) {
+	log.Info(fmt.Sprintf("setCE %v", value))
 	if err := rf.ce.Out(gpio.Level(value)); nil != err {
 		panic(errors.New("rf.ce.Out: " + err.Error()))
 	}
@@ -52,6 +57,7 @@ func setCE(rf *NRFTransmitter, value bool) {
  * @param data length of data array determines how much bytes would be read and written
  */
 func sendCommand(rf *NRFTransmitter, command Command, data []byte) []byte {
+	log.Info(fmt.Sprintf("sendCommand %x, data %v, rf %v\n", command, data, rf))
 	var write = make([]byte, 1)
 	write[0] = byte(command)
 	write = append(write, data...)
@@ -86,10 +92,21 @@ func getPipeNumberReceived(rf *NRFTransmitter) byte {
 	return ret
 }
 
-func OpenTransmitter(settings TransmitterSettings) NRFTransmitter {
+func OpenTransmitter(settings TransmitterSettings) (retRF NRFTransmitter) {
 	rf := NRFTransmitter{}
 	rf.mutex.Lock()
-	defer rf.mutex.Unlock()
+	defer func() {
+		// if we will unlock in the original rf, the returning copy of it won't be affected
+		retRF.mutex.Unlock()
+	}()
+	// logging
+	//log.Formatter = new(logrus.JSONFormatter)
+	log.Formatter = new(logrus.TextFormatter) //default
+	//log.Formatter.(*logrus.TextFormatter).DisableColors = true    // remove colors
+	//log.Formatter.(*logrus.TextFormatter).DisableTimestamp = true // remove timestamp from test output
+	log.Level = logrus.TraceLevel
+	log.Out = os.Stdout
+	log.Info(fmt.Sprintf("OpenTransmitter begin, %v", rf.mutex))
 	// Make sure periphery is initialized.
 	if _, err := host.Init(); err != nil {
 		panic(errors.New("host.Init: " + err.Error()))
@@ -100,13 +117,20 @@ func OpenTransmitter(settings TransmitterSettings) NRFTransmitter {
 		panic(errors.New("spireg.Open of port " + settings.PortName + ": " + err.Error()))
 	}
 	rf.port = port
+	defer func() {
+		if nil != recover() {
+			CloseTransmitter(&rf)
+		}
+	}()
 	// Convert the spi.Port into a spi.Conn so it can be used for communication.
 	connection, err := rf.port.Connect(1*physic.MegaHertz, spi.Mode0, 8)
 	if err != nil {
 		panic(errors.New("port.Connect: " + err.Error()))
 	}
 	rf.connection = connection
-	// now gpio
+	// now GPIO
+	// notice: if pin configured as input and tied to irq, it can not be reconfigured as output, but it does not produce error
+	// so it needs to be unexported or untied from irq before changing direction
 	// CE (this signal is active high and used to activate the chip in RX or TX mode)
 	rf.ce = gpioreg.ByName(settings.CEName)
 	if nil == rf.ce {
@@ -193,8 +217,7 @@ func run(rf *NRFTransmitter) {
 	// by the state machine in the STATUS register
 	for rf.irq.WaitForEdge(-1) {
 		rf.mutex.Lock()
-		logrus.Info("IRQ happened")
-		//fmt.Println("IRQ happened")
+		log.Info("IRQ happened")
 		setCE(rf, false)
 		// update status register
 		sendCommand(rf, CNop, []byte{})
@@ -231,6 +254,7 @@ func run(rf *NRFTransmitter) {
 func Listen(rf *NRFTransmitter, address Address) {
 	rf.mutex.Lock()
 	defer rf.mutex.Unlock()
+	log.Info(fmt.Sprintf("Listen %v", address))
 	var config = readRegister(rf, RConfig)
 	config[0] |= BV(BPrimRx)
 	writeRegister(rf, RConfig, config)
@@ -241,6 +265,7 @@ func Listen(rf *NRFTransmitter, address Address) {
 func Transmit(rf *NRFTransmitter, a Address, data Payload) {
 	rf.mutex.Lock()
 	defer rf.mutex.Unlock()
+	log.Info("nRF model.Transmit")
 	if 32 < len(data) {
 		panic(errors.New("too big payload, " + string(len(data))))
 	}
@@ -261,6 +286,7 @@ func Transmit(rf *NRFTransmitter, a Address, data Payload) {
 func GoIdle(rf *NRFTransmitter) {
 	rf.mutex.Lock()
 	defer rf.mutex.Unlock()
+	log.Info("nRF model.GoIdle")
 	setCE(rf, false)
 }
 
@@ -271,6 +297,7 @@ func ValidateRfChannel(channel byte) bool {
 func SetRfChannel(rf *NRFTransmitter, channel byte) {
 	rf.mutex.Lock()
 	defer rf.mutex.Unlock()
+	log.Info("nRF model.SetRfChannel")
 	if !ValidateRfChannel(channel) {
 		panic(errors.New("incorrect channel " + string(channel)))
 	}

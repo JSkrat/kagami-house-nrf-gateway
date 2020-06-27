@@ -159,7 +159,8 @@ func validateResponse(to *nRF_model.Address, rq *request, rs *nRF_model.Message)
 func callFunction(rf *RFModel, uid UID, fno FuncNo, payload nRF_model.Payload) nRF_model.Payload {
 	rq := createRequest(uid.Unit, byte(fno), payload)
 	rqSerialized := serializeRequest(&rq)
-	for i := 3; 0 > i; i-- {
+	for i := 3; 0 <= i; i-- {
+		log.Info(fmt.Sprintf("callFunction try %v", i))
 		nRF_model.Transmit(&rf.transmitter, uid.Address, rqSerialized)
 		// wait for transmission completes
 		<-rf.transmitter.SendMessageStatus // what could possibly go wrong here?)
