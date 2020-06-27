@@ -27,28 +27,6 @@ func Close(rf *RFModel) {
 	nRF_model.CloseTransmitter(&rf.transmitter)
 }
 
-func validateResponse(to *nRF_model.Address, rq *request, rs *nRF_model.Message) (retResp response, retStatus bool) {
-	retResp = parseResponse(&rs.Payload)
-	defer func() {
-		if r := recover(); r != nil {
-			if _, ok := r.(PacketValidationError); ok {
-				retStatus = false
-			}
-		}
-	}()
-	if !basicValidateResponse(&retResp) {
-		panic(PacketValidationError(errors.New("basicValidateResponse")))
-	}
-	if *to != rs.Address {
-		// todo count that cases
-		panic(PacketValidationError(errors.New("unexpected packet from wrong address")))
-	}
-	if rq.TransactionID != retResp.TransactionID {
-		panic(PacketValidationError(errors.New("bad transaction id")))
-	}
-	return retResp, true
-}
-
 func checkPayload(payload nRF_model.Payload, length int, uid UID, fno FuncNo) {
 	if len(payload) != length {
 		panic(errors.New(fmt.Sprintf(

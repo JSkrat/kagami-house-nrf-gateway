@@ -134,31 +134,55 @@ func basicValidateResponse(r *response) bool {
 	return true
 }
 
-// todo add several tries in case of fail here
+func validateResponse(to *nRF_model.Address, rq *request, rs *nRF_model.Message) (retResp response, retStatus bool) {
+	retResp = parseResponse(&rs.Payload)
+	defer func() {
+		if r := recover(); r != nil {
+			if _, ok := r.(PacketValidationError); ok {
+				retStatus = false
+			}
+		}
+	}()
+	if !basicValidateResponse(&retResp) {
+		panic(PacketValidationError(errors.New("basicValidateResponse")))
+	}
+	if *to != rs.Address {
+		// todo count that cases
+		panic(PacketValidationError(errors.New("unexpected packet from wrong address")))
+	}
+	if rq.TransactionID != retResp.TransactionID {
+		panic(PacketValidationError(errors.New("bad transaction id")))
+	}
+	return retResp, true
+}
+
 func callFunction(rf *RFModel, uid UID, fno FuncNo, payload nRF_model.Payload) nRF_model.Payload {
 	rq := createRequest(uid.unit, byte(fno), payload)
-	nRF_model.Transmit(&rf.transmitter, uid.address, serializeRequest(&rq))
-	// wait for transmission completes
-	<-rf.transmitter.SendMessageStatus // what could possibly go wrong here?)
-	nRF_model.Listen(&rf.transmitter, uid.address)
-	timeoutChan := make(chan bool)
-	go func() {
-		<-time.After(20 * time.Millisecond)
-		timeoutChan <- true
-	}()
-	for {
-		select {
-		case message := <-rf.transmitter.ReceiveMessage:
-			// message received
-			if pm, ok := validateResponse(&uid.address, &rq, &message); ok {
-				// now we have received, parsed and validated message from the device
-				if 0 != pm.Code {
-					panic(errors.New(fmt.Sprintf("error code %v", pm.Code)))
+	for i := 3; 0 > i; i-- {
+		nRF_model.Transmit(&rf.transmitter, uid.address, serializeRequest(&rq))
+		// wait for transmission completes
+		<-rf.transmitter.SendMessageStatus // what could possibly go wrong here?)
+		nRF_model.Listen(&rf.transmitter, uid.address)
+		timeoutChan := make(chan bool)
+		go func() {
+			<-time.After(20 * time.Millisecond)
+			timeoutChan <- true
+		}()
+		for {
+			select {
+			case message := <-rf.transmitter.ReceiveMessage:
+				// message received
+				if pm, ok := validateResponse(&uid.address, &rq, &message); ok {
+					// now we have received, parsed and validated message from the device
+					if 0 != pm.Code {
+						panic(errors.New(fmt.Sprintf("error code %v", pm.Code)))
+					}
+					return pm.Payload()
 				}
-				return pm.Payload()
+			case <-timeoutChan:
+				continue
 			}
-		case <-timeoutChan:
-			panic(errors.New("response timeout"))
 		}
 	}
+	panic(errors.New("response timeout 3 times in a row"))
 }
