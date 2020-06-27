@@ -67,7 +67,7 @@ func ReadFunction(rf *RFModel, uid UID, fno FuncNo) Variant {
 		{
 			checkPayload(payload, 4, uid, fno)
 			// todo test against negative values
-			return int32(payload[0] + payload[1]<<8 + payload[2]<<16 + payload[3]<<24)
+			return int32(payload[0]) + int32(payload[1])<<8 + int32(payload[2])<<16 + int32(payload[3])<<24
 		}
 	case EDString:
 		{
