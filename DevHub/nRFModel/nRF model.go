@@ -208,7 +208,7 @@ func receiveMessages(rf *NRFTransmitter) {
 		m.pipe = getPipeNumberReceived(rf) // if no messages that will panic
 		writeByteRegister(rf, RStatus, BV(BRxDr))
 		// get payload
-		payloadLength := sendCommand(rf, CReadRxPayloadWidth, []byte{})[0]
+		payloadLength := sendCommand(rf, CReadRxPayloadWidth, []byte{0})[0]
 		if 0 == payloadLength {
 			m.Payload = Payload{}
 		} else {
