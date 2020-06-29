@@ -118,8 +118,11 @@ func OpenTransmitter(settings TransmitterSettings) (retRF NRFTransmitter) {
 	}
 	rf.port = port
 	defer func() {
-		if nil != recover() {
+		if r := recover(); nil != r {
+			log.Error(r)
 			CloseTransmitter(&rf)
+			retRF = rf
+			panic(r)
 		}
 	}()
 	// Convert the spi.Port into a spi.Conn so it can be used for communication.
@@ -136,13 +139,16 @@ func OpenTransmitter(settings TransmitterSettings) (retRF NRFTransmitter) {
 	if nil == rf.ce {
 		panic(errors.New("ce pin <" + settings.CEName + "> was not initialized"))
 	}
+	if err := rf.ce.Out(gpio.Low); err != nil {
+		panic(errors.New("initialization CE, PinOut.Out: " + err.Error()))
+	}
 	// IRQ (this signal is active low and controlled by three maskable interrupt sources)
 	rf.irq = gpioreg.ByName(settings.IrqName)
 	if nil == rf.irq {
 		panic(errors.New("irq pin <" + settings.IrqName + "> was not initialized"))
 	}
 	if err := rf.irq.In(gpio.PullNoChange, gpio.FallingEdge); err != nil {
-		panic(errors.New("PinIn.In: " + err.Error()))
+		panic(errors.New("Initialization IRQ, PinIn.In: " + err.Error()))
 	}
 	initNRF(&rf)
 	go run(&rf)
@@ -167,7 +173,12 @@ func initNRF(rf *NRFTransmitter) {
 }
 
 func CloseTransmitter(rf *NRFTransmitter) {
-	_ = rf.port.Close()
+	if nil != rf.port {
+		_ = rf.port.Close()
+	}
+	if nil != rf.irq {
+		rf.irq.In(gpio.PullNoChange, gpio.NoEdge)
+	}
 }
 
 func receiveMessages(rf *NRFTransmitter) {
