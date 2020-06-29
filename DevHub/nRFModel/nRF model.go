@@ -92,13 +92,9 @@ func getPipeNumberReceived(rf *NRFTransmitter) byte {
 	return ret
 }
 
-func OpenTransmitter(settings TransmitterSettings) (retRF NRFTransmitter) {
-	rf := NRFTransmitter{}
+func OpenTransmitter(rf *NRFTransmitter, settings TransmitterSettings) {
 	rf.mutex.Lock()
-	defer func() {
-		// if we will unlock in the original rf, the returning copy of it won't be affected
-		retRF.mutex.Unlock()
-	}()
+	defer rf.mutex.Unlock()
 	// logging
 	//log.Formatter = new(logrus.JSONFormatter)
 	log.Formatter = new(logrus.TextFormatter) //default
@@ -106,7 +102,7 @@ func OpenTransmitter(settings TransmitterSettings) (retRF NRFTransmitter) {
 	//log.Formatter.(*logrus.TextFormatter).DisableTimestamp = true // remove timestamp from test output
 	log.Level = logrus.TraceLevel
 	log.Out = os.Stdout
-	log.Info(fmt.Sprintf("OpenTransmitter begin, %v", rf.mutex))
+	log.Info(fmt.Sprintf("OpenTransmitter begin, %v", &rf.mutex))
 	// Make sure periphery is initialized.
 	if _, err := host.Init(); err != nil {
 		panic(errors.New("host.Init: " + err.Error()))
@@ -120,8 +116,7 @@ func OpenTransmitter(settings TransmitterSettings) (retRF NRFTransmitter) {
 	defer func() {
 		if r := recover(); nil != r {
 			log.Error(r)
-			CloseTransmitter(&rf)
-			retRF = rf
+			CloseTransmitter(rf)
 			panic(r)
 		}
 	}()
@@ -150,9 +145,8 @@ func OpenTransmitter(settings TransmitterSettings) (retRF NRFTransmitter) {
 	if err := rf.irq.In(gpio.PullNoChange, gpio.FallingEdge); err != nil {
 		panic(errors.New("Initialization IRQ, PinIn.In: " + err.Error()))
 	}
-	initNRF(&rf)
-	go run(&rf)
-	return rf
+	initNRF(rf)
+	go run(rf)
 }
 
 func initNRF(rf *NRFTransmitter) {
@@ -227,6 +221,7 @@ func run(rf *NRFTransmitter) {
 	// The IRQ pin is activated then TX_DS IRQ, RX_DR IRQ os MAX_RT IRQ are set high
 	// by the state machine in the STATUS register
 	for rf.irq.WaitForEdge(-1) {
+		log.Info("IRQ happened before mutex lock")
 		rf.mutex.Lock()
 		log.Info("IRQ happened")
 		setCE(rf, false)

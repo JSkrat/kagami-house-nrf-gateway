@@ -178,6 +178,7 @@ func callFunction(rf *RFModel, uid UID, fno FuncNo, payload nRF_model.Payload) n
 			<-time.After(50 * time.Millisecond)
 			timeoutChan <- true
 		}()
+	waitForResponse:
 		for {
 			select {
 			case message := <-rf.transmitter.ReceiveMessage:
@@ -190,7 +191,8 @@ func callFunction(rf *RFModel, uid UID, fno FuncNo, payload nRF_model.Payload) n
 					return pm.Payload()
 				}
 			case <-timeoutChan:
-				continue
+				log.Info("RFModel.Protocol.callFucntion: listen timeout")
+				break waitForResponse
 			}
 		}
 	}

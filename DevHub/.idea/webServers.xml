@@ -9,6 +9,13 @@
           </advancedOptions>
         </fileTransfer>
       </webServer>
+      <webServer id="d85b8bfe-9793-41bc-9da9-360bea6dd28c" name="raspberry zero w">
+        <fileTransfer rootFolder="/home/pi" accessType="SFTP" host="192.168.88.242" port="22" sshConfigId="c4b0a9d1-6391-46e4-a662-d04cda5ecf54" sshConfig="pi@192.168.88.242:22 password">
+          <advancedOptions>
+            <advancedOptions dataProtectionLevel="Private" passiveMode="true" shareSSLContext="true" />
+          </advancedOptions>
+        </fileTransfer>
+      </webServer>
     </option>
   </component>
 </project>

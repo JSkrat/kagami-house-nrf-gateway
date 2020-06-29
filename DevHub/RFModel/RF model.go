@@ -19,7 +19,7 @@ type RFModel struct {
 
 var log = logrus.New()
 
-func Init(settings nRF_model.TransmitterSettings) RFModel {
+func Init(rf *RFModel, settings nRF_model.TransmitterSettings) {
 	// logging
 	//log.Formatter = new(logrus.JSONFormatter)
 	log.Formatter = new(logrus.TextFormatter) //default
@@ -27,11 +27,9 @@ func Init(settings nRF_model.TransmitterSettings) RFModel {
 	//log.Formatter.(*logrus.TextFormatter).DisableTimestamp = true // remove timestamp from test output
 	log.Level = logrus.TraceLevel
 	log.Out = os.Stdout
-	rf := RFModel{}
-	rf.transmitter = nRF_model.OpenTransmitter(settings)
+	nRF_model.OpenTransmitter(&rf.transmitter, settings)
 	rf.transmitter.SendMessageStatus = make(chan nRF_model.Message)
 	rf.transmitter.ReceiveMessage = make(chan nRF_model.Message)
-	return rf
 }
 
 func Close(rf *RFModel) {
