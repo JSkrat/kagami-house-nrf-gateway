@@ -84,6 +84,16 @@ func writeByteRegister(rf *NRFTransmitter, r Register, data byte) {
 	writeRegister(rf, r, []byte{data})
 }
 
+func setPrimRx(rf *NRFTransmitter, v bool) {
+	var config = readRegister(rf, RConfig)
+	if v {
+		config[0] |= BV(BPrimRx)
+	} else {
+		config[0] &^= BV(BPrimRx)
+	}
+	writeRegister(rf, RConfig, config)
+}
+
 func getPipeNumberReceived(rf *NRFTransmitter) byte {
 	ret := (rf.status & BRxPNoMask) >> BRxPNo
 	if 7 == ret {
@@ -164,6 +174,8 @@ func initNRF(rf *NRFTransmitter) {
 	writeByteRegister(rf, REnRxAddr, BV(BEnRxP0))
 	// 1Mbps, max power
 	writeByteRegister(rf, RRFSetup, 0x03<<byte(BRfPwr))
+	// mode receive
+	setPrimRx(rf, true)
 }
 
 func CloseTransmitter(rf *NRFTransmitter) {
@@ -186,7 +198,9 @@ func receiveMessages(rf *NRFTransmitter) {
 	defer func() {
 		// todo we need to distinguish what exactly panic happened
 		// here we should be catching getPipeNumberReceived panic only!
-		recover()
+		if r := recover(); nil != r {
+			log.Warn("receiveMessages panic", r)
+		}
 	}()
 	for {
 		var m Message
@@ -231,6 +245,7 @@ func run(rf *NRFTransmitter) {
 		if 0 != rf.status&BV(BTxDs) {
 			// Data Sent Tx FIFO interrupt. Asserted when the packet is transmitter on TX.
 			// If AUTO_ACK is activates, this bit is set high only when ACK is received.
+			setPrimRx(rf, true)
 			copy(m.Address[:], readRegister(rf, RTxAddr))
 			m.Status = EMSTransmitted
 			// reset the flag
@@ -241,6 +256,7 @@ func run(rf *NRFTransmitter) {
 		} else if 0 != rf.status&BV(BMaxRt) {
 			// Maximum number of TX retransmits interrupt
 			// If MAX_RT is asserted, it must be cleared to enable further communication.
+			setPrimRx(rf, true)
 			copy(m.Address[:], readRegister(rf, RTxAddr))
 			m.Status = EMSNoAck
 			// TX FIFO does not pop failed element. If we won't clean it, it will be re-sent again.
@@ -261,10 +277,9 @@ func Listen(rf *NRFTransmitter, address Address) {
 	rf.mutex.Lock()
 	defer rf.mutex.Unlock()
 	log.Info(fmt.Sprintf("Listen %v", address))
-	var config = readRegister(rf, RConfig)
-	config[0] |= BV(BPrimRx)
-	writeRegister(rf, RConfig, config)
+	_ = readRegister(rf, RFifoStatus)
 	writeRegister(rf, RRxAddrP0, address[:])
+	writeByteRegister(rf, REnRxAddr, BV(BEnRxP0))
 	setCE(rf, true)
 }
 
@@ -283,9 +298,7 @@ func Transmit(rf *NRFTransmitter, a Address, data Payload) {
 	writeRegister(rf, RTxAddr, a[:])
 	writeRegister(rf, RRxAddrP0, a[:])
 	sendCommand(rf, CWriteTxPayload, data)
-	var config = readRegister(rf, RConfig)
-	config[0] &^= BV(BPrimRx)
-	writeRegister(rf, RConfig, config)
+	setPrimRx(rf, false)
 	setCE(rf, true)
 }
 
