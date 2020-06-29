@@ -163,7 +163,15 @@ func callFunction(rf *RFModel, uid UID, fno FuncNo, payload nRF_model.Payload) n
 		log.Info(fmt.Sprintf("callFunction try %v", i))
 		nRF_model.Transmit(&rf.transmitter, uid.Address, rqSerialized)
 		// wait for transmission completes
-		<-rf.transmitter.SendMessageStatus // what could possibly go wrong here?)
+		select {
+		case <-rf.transmitter.SendMessageStatus:
+			// ok
+		case <-time.After(20 * time.Millisecond):
+			panic(errors.New(fmt.Sprintf(
+				"callFunction.Transmit timeout, no irq TX_DS in 20ms after transmission. UID %v, fno %v, payload %v",
+				uid, fno, payload,
+			)))
+		}
 		nRF_model.Listen(&rf.transmitter, uid.Address)
 		timeoutChan := make(chan bool)
 		go func() {
@@ -187,7 +195,7 @@ func callFunction(rf *RFModel, uid UID, fno FuncNo, payload nRF_model.Payload) n
 		}
 	}
 	panic(errors.New(fmt.Sprintf(
-		"response timeout 3 times in a row for uid %v, fno %v, payload %v. Packet is %v",
+		"callFunction.Listen: response timeout 3 times in a row for uid %v, fno %v, payload %v. Packet is %v",
 		uid, fno, payload, rqSerialized,
 	)))
 }
