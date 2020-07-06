@@ -12,6 +12,6 @@ type FuncNo byte
 
 type Model interface {
 	Close()
-	ReadFunction(rf *Model, uid UID, fno FuncNo) Variant
-	WriteFunction(rf *Model, uid UID, fno FuncNo, value Variant)
+	ReadFunction(uid UID, fno FuncNo) Variant
+	WriteFunction(uid UID, fno FuncNo, value Variant)
 }

@@ -17,18 +17,19 @@ func main() {
 	var model TranscieverModel.Model
 	switch settings.Section("").Key("rf model").In("nrf", []string{"nrf", "usb master"}) {
 	case "nrf":
-		model = RFModel.RFModel{}
-		RFModel.Init(&model, nRF_model.TransmitterSettings{
+		var rfModel RFModel.RFModel
+		RFModel.Init(&rfModel, nRF_model.TransmitterSettings{
 			PortName: settings.Section("nrf").Key("port").String(),
 			IrqName:  settings.Section("nrf").Key("irq").String(),
 			CEName:   settings.Section("nrf").Key("ce").String(),
 		})
+		model = &rfModel
 	case "usb master":
-		model = RFModel.RFModel{}
+		model = &RFModel.RFModel{}
 	}
 	defer model.Close()
 	uid := TranscieverModel.UID{Address: [5]byte{0xAA, 0xAA, 0xAA, 0xAA, 0x55}, Unit: 1}
-	model.WriteFunction(&model, uid, 0x19, byte(0xE1))
-	response := model.ReadFunction(&model, uid, 0x18).(byte)
+	model.WriteFunction(uid, 0x19, byte(0xE1))
+	response := model.ReadFunction(uid, 0x18).(byte)
 	fmt.Printf("Wrote 0xE1, read %v", response)
 }

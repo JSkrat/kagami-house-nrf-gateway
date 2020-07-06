@@ -42,7 +42,7 @@ func checkPayload(payload nRF_model.Payload, length int, uid TranscieverModel.UI
 	}
 }
 
-func ReadFunction(rf *RFModel, uid TranscieverModel.UID, fno TranscieverModel.FuncNo) TranscieverModel.Variant {
+func (rf *RFModel) ReadFunction(uid TranscieverModel.UID, fno TranscieverModel.FuncNo) TranscieverModel.Variant {
 	// check all device units and functions data types to cast
 	checkDeviceUnits(rf, uid)
 	payload := callFunction(rf, uid, fno, []byte{})
@@ -89,7 +89,7 @@ func ReadFunction(rf *RFModel, uid TranscieverModel.UID, fno TranscieverModel.Fu
 	panic(errors.New(fmt.Sprintf("unexpected data type %v for uid %v fno %v payload %v", dataType, uid, fno, payload)))
 }
 
-func WriteFunction(rf *RFModel, uid TranscieverModel.UID, fno TranscieverModel.FuncNo, value TranscieverModel.Variant) {
+func (rf *RFModel) WriteFunction(uid TranscieverModel.UID, fno TranscieverModel.FuncNo, value TranscieverModel.Variant) {
 	checkDeviceUnits(rf, uid)
 	var payload nRF_model.Payload
 	dataType := UnitFunctions[UnitFunctionKey{
