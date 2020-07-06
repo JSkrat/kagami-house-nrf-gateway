@@ -1,6 +1,7 @@
 package RFModel
 
 import (
+	"../TranscieverModel"
 	"../nRFModel"
 	"bytes"
 	"encoding/binary"
@@ -13,8 +14,8 @@ const (
 	PacketLength       uint = 32
 	RequestHeaderSize  uint = 4
 	ResponseHeaderSize uint = 3
-	MaxDataLengthRq    uint = PacketLength - RequestHeaderSize
-	MaxDataLengthRs    uint = PacketLength - ResponseHeaderSize
+	MaxDataLengthRq         = PacketLength - RequestHeaderSize
+	MaxDataLengthRs         = PacketLength - ResponseHeaderSize
 )
 
 type request struct {
@@ -46,18 +47,16 @@ const (
 	EDUnspecified           = 0xF
 )
 
-type FuncNo byte
-
 const (
 	// Unit 0, global device functions
-	F0SetNewSessionKey         FuncNo = 0
-	F0GetNumberOfInternalUnits        = 1
-	F0SetMACAddress                   = 2
-	F0SetRFChannel                    = 6
-	F0GetDeviceStatistics             = 3
-	F0NOP                             = 5
-	F0ResetTransactionId              = 4
-	F0SetSlaveMode                    = 7
+	F0SetNewSessionKey         TranscieverModel.FuncNo = 0
+	F0GetNumberOfInternalUnits                         = 1
+	F0SetMACAddress                                    = 2
+	F0SetRFChannel                                     = 6
+	F0GetDeviceStatistics                              = 3
+	F0NOP                                              = 5
+	F0ResetTransactionId                               = 4
+	F0SetSlaveMode                                     = 7
 	// per Unit functions
 	FGetListOfUnitFunctions = 0
 	FGetTextDescription     = 1
@@ -156,26 +155,27 @@ func validateResponse(to *nRF_model.Address, rq *request, rs *nRF_model.Message)
 	return retResp, true
 }
 
-func callFunction(rf *RFModel, uid UID, fno FuncNo, payload nRF_model.Payload) nRF_model.Payload {
+func callFunction(rf *RFModel, uid TranscieverModel.UID, fno TranscieverModel.FuncNo, payload nRF_model.Payload) nRF_model.Payload {
 	rq := createRequest(uid.Unit, byte(fno), payload)
 	rqSerialized := serializeRequest(&rq)
 	for i := 3; 0 <= i; i-- {
 		log.Info(fmt.Sprintf("callFunction try %v", i))
 		nRF_model.Transmit(&rf.transmitter, uid.Address, rqSerialized)
 		// wait for transmission completes
-		select {
-		case <-rf.transmitter.SendMessageStatus:
-			// ok
-		case <-time.After(20 * time.Millisecond):
+		<-rf.transmitter.SendMessageStatus
+		/*select {
+		case <-time.After(2 * time.Millisecond):
 			panic(errors.New(fmt.Sprintf(
 				"callFunction.Transmit timeout, no irq TX_DS in 20ms after transmission. UID %v, fno %v, payload %v",
 				uid, fno, payload,
 			)))
-		}
+		case <-rf.transmitter.SendMessageStatus:
+			// ok
+		}//*/
 		nRF_model.Listen(&rf.transmitter, uid.Address)
 		timeoutChan := make(chan bool)
 		go func() {
-			<-time.After(50 * time.Millisecond)
+			<-time.After(10000 * time.Millisecond)
 			timeoutChan <- true
 		}()
 	waitForResponse:

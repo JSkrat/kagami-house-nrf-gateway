@@ -41,7 +41,7 @@ func BV(b Bit) byte {
 }
 
 func setCE(rf *NRFTransmitter, value bool) {
-	log.Info(fmt.Sprintf("setCE %v", value))
+	log.Debug(fmt.Sprintf("setCE %v", value))
 	if err := rf.ce.Out(gpio.Level(value)); nil != err {
 		panic(errors.New("rf.ce.Out: " + err.Error()))
 	}
@@ -57,7 +57,7 @@ func setCE(rf *NRFTransmitter, value bool) {
  * @param data length of data array determines how much bytes would be read and written
  */
 func sendCommand(rf *NRFTransmitter, command Command, data []byte) []byte {
-	log.Info(fmt.Sprintf("sendCommand %x, data %v, rf %v\n", command, data, rf))
+	log.Debug(fmt.Sprintf("sendCommand %x, data %v, rf %v\n", command, data, rf))
 	var write = make([]byte, 1)
 	write[0] = byte(command)
 	write = append(write, data...)
@@ -110,7 +110,7 @@ func OpenTransmitter(rf *NRFTransmitter, settings TransmitterSettings) {
 	log.Formatter = new(logrus.TextFormatter) //default
 	//log.Formatter.(*logrus.TextFormatter).DisableColors = true    // remove colors
 	//log.Formatter.(*logrus.TextFormatter).DisableTimestamp = true // remove timestamp from test output
-	log.Level = logrus.TraceLevel
+	log.Level = logrus.InfoLevel
 	log.Out = os.Stdout
 	log.Info(fmt.Sprintf("OpenTransmitter begin, %v", &rf.mutex))
 	// Make sure periphery is initialized.
@@ -235,9 +235,9 @@ func run(rf *NRFTransmitter) {
 	// The IRQ pin is activated then TX_DS IRQ, RX_DR IRQ os MAX_RT IRQ are set high
 	// by the state machine in the STATUS register
 	for rf.irq.WaitForEdge(-1) {
-		log.Info("IRQ happened before mutex lock")
+		log.Trace("IRQ happened before mutex lock")
 		rf.mutex.Lock()
-		log.Info("IRQ happened")
+		log.Debug("IRQ happened")
 		setCE(rf, false)
 		// update status register
 		sendCommand(rf, CNop, []byte{})
@@ -276,10 +276,10 @@ func run(rf *NRFTransmitter) {
 func Listen(rf *NRFTransmitter, address Address) {
 	rf.mutex.Lock()
 	defer rf.mutex.Unlock()
-	log.Info(fmt.Sprintf("Listen %v", address))
-	_ = readRegister(rf, RFifoStatus)
+	log.Debug(fmt.Sprintf("Listen %v", address))
+	//_ = readRegister(rf, RFifoStatus)
 	writeRegister(rf, RRxAddrP0, address[:])
-	writeByteRegister(rf, REnRxAddr, BV(BEnRxP0))
+	//writeByteRegister(rf, REnRxAddr, BV(BEnRxP0))
 	setCE(rf, true)
 }
 

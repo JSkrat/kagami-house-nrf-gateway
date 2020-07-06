@@ -1,6 +1,7 @@
 package RFModel
 
 import (
+	"../TranscieverModel"
 	"../nRFModel"
 	"errors"
 	"fmt"
@@ -8,12 +9,8 @@ import (
 	"os"
 )
 
-type UID struct {
-	Address nRF_model.Address
-	Unit    byte
-}
-type Variant interface{}
 type RFModel struct {
+	TranscieverModel.Model
 	transmitter nRF_model.NRFTransmitter
 }
 
@@ -32,11 +29,11 @@ func Init(rf *RFModel, settings nRF_model.TransmitterSettings) {
 	rf.transmitter.ReceiveMessage = make(chan nRF_model.Message)
 }
 
-func Close(rf *RFModel) {
+func (rf *RFModel) Close() {
 	nRF_model.CloseTransmitter(&rf.transmitter)
 }
 
-func checkPayload(payload nRF_model.Payload, length int, uid UID, fno FuncNo) {
+func checkPayload(payload nRF_model.Payload, length int, uid TranscieverModel.UID, fno TranscieverModel.FuncNo) {
 	if len(payload) != length {
 		panic(errors.New(fmt.Sprintf(
 			"payload (%v) length does not correspond data type length %v for uid %v fno %v",
@@ -45,7 +42,7 @@ func checkPayload(payload nRF_model.Payload, length int, uid UID, fno FuncNo) {
 	}
 }
 
-func ReadFunction(rf *RFModel, uid UID, fno FuncNo) Variant {
+func ReadFunction(rf *RFModel, uid TranscieverModel.UID, fno TranscieverModel.FuncNo) TranscieverModel.Variant {
 	// check all device units and functions data types to cast
 	checkDeviceUnits(rf, uid)
 	payload := callFunction(rf, uid, fno, []byte{})
@@ -92,7 +89,7 @@ func ReadFunction(rf *RFModel, uid UID, fno FuncNo) Variant {
 	panic(errors.New(fmt.Sprintf("unexpected data type %v for uid %v fno %v payload %v", dataType, uid, fno, payload)))
 }
 
-func WriteFunction(rf *RFModel, uid UID, fno FuncNo, value Variant) {
+func WriteFunction(rf *RFModel, uid TranscieverModel.UID, fno TranscieverModel.FuncNo, value TranscieverModel.Variant) {
 	checkDeviceUnits(rf, uid)
 	var payload nRF_model.Payload
 	dataType := UnitFunctions[UnitFunctionKey{
