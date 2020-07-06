@@ -29,15 +29,15 @@ var Devices = map[DeviceKey]*Device{}
 var UnitFunctions = map[UnitFunctionKey]UnitFunction{}
 
 func updateDeviceUnits(rf *RFModel, address nRF_model.Address) {
-	unitsCountResponse := callFunction(rf, TranscieverModel.UID{Address: address, Unit: 0}, F0GetNumberOfInternalUnits, []byte{})
+	unitsCountResponse := callFunction(rf, TranscieverModel.UID{Address: address, Unit: 0}, FGetListOfUnitFunctions, []byte{})
 	// validation of the request. Don't like that huge chunk here it has to go somewhere else(
 	if 1 != len(unitsCountResponse) {
-		panic(errors.New(fmt.Sprintf(
+		panic(fmt.Errorf(
 			"incorrect response %v from the device %v Unit 0 function get number of internal units %v",
 			unitsCountResponse,
 			address,
-			F0GetNumberOfInternalUnits,
-		)))
+			FGetListOfUnitFunctions,
+		))
 	}
 	// todo get device statistics here too
 	deviceKey := DeviceKey(address)

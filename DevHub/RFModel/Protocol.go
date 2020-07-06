@@ -49,14 +49,13 @@ const (
 
 const (
 	// Unit 0, global device functions
-	F0SetNewSessionKey         TranscieverModel.FuncNo = 0
-	F0GetNumberOfInternalUnits                         = 1
-	F0SetMACAddress                                    = 2
-	F0SetRFChannel                                     = 6
-	F0GetDeviceStatistics                              = 3
-	F0NOP                                              = 5
-	F0ResetTransactionId                               = 4
-	F0SetSlaveMode                                     = 7
+	F0SetNewSessionKey         TranscieverModel.FuncNo = 10
+	F0SetMACAddress                                    = 12
+	F0SetRFChannel                                     = 16
+	F0GetDeviceStatistics                              = 13
+	F0NOP                                              = 15
+	F0ResetTransactionId                               = 14
+	F0SetSlaveMode                                     = 17
 	// per Unit functions
 	FGetListOfUnitFunctions = 0
 	FGetTextDescription     = 1
