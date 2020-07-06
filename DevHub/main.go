@@ -22,6 +22,7 @@ func main() {
 			PortName: settings.Section("nrf").Key("port").String(),
 			IrqName:  settings.Section("nrf").Key("irq").String(),
 			CEName:   settings.Section("nrf").Key("ce").String(),
+			Speed:	  float32(settings.Section("nrf").Key("speed").Float64()),
 		})
 		model = &rfModel
 	case "usb master":

@@ -16,7 +16,7 @@ import (
 )
 
 var log = logrus.New()
-
+// NRFTransmitter "handle"
 type NRFTransmitter struct {
 	port           spi.PortCloser
 	connection     spi.Conn
@@ -34,8 +34,9 @@ type TransmitterSettings struct {
 	PortName string
 	IrqName  string
 	CEName   string
+	Speed	 float32
 }
-
+// BV returns 2^b
 func BV(b Bit) byte {
 	return 1 << byte(b)
 }
@@ -131,7 +132,7 @@ func OpenTransmitter(rf *NRFTransmitter, settings TransmitterSettings) {
 		}
 	}()
 	// Convert the spi.Port into a spi.Conn so it can be used for communication.
-	connection, err := rf.port.Connect(1*physic.MegaHertz, spi.Mode0, 8)
+	connection, err := rf.port.Connect(physic.Frequency(settings.Speed)*physic.MegaHertz, spi.Mode0, 8)
 	if err != nil {
 		panic(errors.New("port.Connect: " + err.Error()))
 	}
