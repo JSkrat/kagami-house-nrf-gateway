@@ -1,17 +1,33 @@
 package TranscieverModel
 
-import "../nRFModel"
+// Address of the physical device, basically address of the transciever
+type Address [5]byte
 
-type UID struct {
-	Address nRF_model.Address
-	Unit    byte
+// Payload in radio packet
+type Payload []byte
+
+// Message via radio channel in payload
+type Message struct {
+	Address Address
+	Payload Payload
+	Pipe    byte
+	Status  EMessageStatus
 }
-type Variant interface{}
 
-type FuncNo byte
+// EMessageStatus of the radio transaction
+type EMessageStatus byte
 
-type Model interface {
+// Message status enum
+const (
+	EMSNone         EMessageStatus = 0x00
+	EMSSlaveTimeout                = 0x01
+	EMSAckTimeout                  = 0x02
+	EMSDataPacket                  = 0x03
+	EMSAckPacket                   = 0x04
+)
+
+// Transmitter represents any possible transmitter device
+type Transmitter interface {
 	Close()
-	ReadFunction(uid UID, fno FuncNo) Variant
-	WriteFunction(uid UID, fno FuncNo, value Variant)
+	SendCommand(a Address, data Payload) (ret Message)
 }

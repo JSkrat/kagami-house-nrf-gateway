@@ -1,32 +1,36 @@
-package nRF_model
+package nRFModel
 
 import (
 	"errors"
 	"fmt"
-	"github.com/sirupsen/logrus"
 	"os"
+	"sync"
+	"time"
+
+	"../TranscieverModel"
+	"github.com/sirupsen/logrus"
 	"periph.io/x/periph/conn/gpio"
 	"periph.io/x/periph/conn/gpio/gpioreg"
 	"periph.io/x/periph/conn/physic"
 	"periph.io/x/periph/conn/spi"
 	"periph.io/x/periph/conn/spi/spireg"
 	"periph.io/x/periph/host"
-	"sync"
-	"time"
 )
 
 var log = logrus.New()
+
 // NRFTransmitter "handle"
 type NRFTransmitter struct {
+	TranscieverModel.Transmitter
 	port           spi.PortCloser
 	connection     spi.Conn
 	status         uint8
 	channel        uint8
 	ce             gpio.PinOut
 	irq            gpio.PinIn
-	ReceiveMessage chan Message
-	//SendMessage       chan Message
-	SendMessageStatus chan Message
+	ReceiveMessage chan TranscieverModel.Message
+	//SendMessage       chan TranscieverModel.Message
+	SendMessageStatus chan TranscieverModel.Message
 	mutex             sync.Mutex
 }
 
@@ -34,8 +38,9 @@ type TransmitterSettings struct {
 	PortName string
 	IrqName  string
 	CEName   string
-	Speed	 float32
+	Speed    float32
 }
+
 // BV returns 2^b
 func BV(b Bit) byte {
 	return 1 << byte(b)
@@ -127,7 +132,7 @@ func OpenTransmitter(rf *NRFTransmitter, settings TransmitterSettings) {
 	defer func() {
 		if r := recover(); nil != r {
 			log.Error(r)
-			CloseTransmitter(rf)
+			rf.Close()
 			panic(r)
 		}
 	}()
@@ -179,7 +184,8 @@ func initNRF(rf *NRFTransmitter) {
 	setPrimRx(rf, true)
 }
 
-func CloseTransmitter(rf *NRFTransmitter) {
+// Close — release port and gpio
+func (rf *NRFTransmitter) Close() {
 	if nil != rf.port {
 		_ = rf.port.Close()
 	}
@@ -204,24 +210,24 @@ func receiveMessages(rf *NRFTransmitter) {
 		}
 	}()
 	for {
-		var m Message
-		m.Status = EMSReceived
-		m.pipe = getPipeNumberReceived(rf) // if no messages that will panic
+		var m TranscieverModel.Message
+		m.Status = TranscieverModel.EMSDataPacket
+		m.Pipe = getPipeNumberReceived(rf) // if no messages that will panic
 		writeByteRegister(rf, RStatus, BV(BRxDr))
 		// get payload
 		payloadLength := sendCommand(rf, CReadRxPayloadWidth, []byte{0})[0]
 		if 0 == payloadLength {
-			m.Payload = Payload{}
+			m.Payload = TranscieverModel.Payload{}
 		} else {
 			m.Payload = sendCommand(rf, CReadRxPayload, make([]byte, payloadLength))
 		}
 		// get Address
-		if 0 == m.pipe {
+		if 0 == m.Pipe {
 			copy(m.Address[:], readRegister(rf, RRxAddrP0))
 		} else {
 			copy(m.Address[:], readRegister(rf, RRxAddrP1))
-			if 1 < m.pipe {
-				m.Address[len(m.Address)-1] = readRegister(rf, Register(RRxAddrP2-2+m.pipe))[0]
+			if 1 < m.Pipe {
+				m.Address[len(m.Address)-1] = readRegister(rf, Register(RRxAddrP2-2+m.Pipe))[0]
 			}
 		}
 		if nil != rf.ReceiveMessage {
@@ -242,13 +248,13 @@ func run(rf *NRFTransmitter) {
 		setCE(rf, false)
 		// update status register
 		sendCommand(rf, CNop, []byte{})
-		var m Message
+		var m TranscieverModel.Message
 		if 0 != rf.status&BV(BTxDs) {
 			// Data Sent Tx FIFO interrupt. Asserted when the packet is transmitter on TX.
 			// If AUTO_ACK is activates, this bit is set high only when ACK is received.
 			setPrimRx(rf, true)
 			copy(m.Address[:], readRegister(rf, RTxAddr))
-			m.Status = EMSTransmitted
+			m.Status = TranscieverModel.EMSAckPacket
 			// reset the flag
 			writeByteRegister(rf, RStatus, BV(BTxDs))
 			if nil != rf.SendMessageStatus {
@@ -259,7 +265,7 @@ func run(rf *NRFTransmitter) {
 			// If MAX_RT is asserted, it must be cleared to enable further communication.
 			setPrimRx(rf, true)
 			copy(m.Address[:], readRegister(rf, RTxAddr))
-			m.Status = EMSNoAck
+			m.Status = TranscieverModel.EMSAckTimeout
 			// TX FIFO does not pop failed element. If we won't clean it, it will be re-sent again.
 			sendCommand(rf, CFlushTx, []byte{})
 			// reset the flag
@@ -274,7 +280,8 @@ func run(rf *NRFTransmitter) {
 	}
 }
 
-func Listen(rf *NRFTransmitter, address Address) {
+// Listen — switch transciever to a listen mode
+func Listen(rf *NRFTransmitter, address TranscieverModel.Address) {
 	rf.mutex.Lock()
 	defer rf.mutex.Unlock()
 	log.Debug(fmt.Sprintf("Listen %v", address))
@@ -284,7 +291,8 @@ func Listen(rf *NRFTransmitter, address Address) {
 	setCE(rf, true)
 }
 
-func Transmit(rf *NRFTransmitter, a Address, data Payload) {
+// Transmit async request to a transciever, return immediately
+func Transmit(rf *NRFTransmitter, a TranscieverModel.Address, data TranscieverModel.Payload) {
 	rf.mutex.Lock()
 	defer rf.mutex.Unlock()
 	log.Info("nRF model.Transmit")
@@ -303,6 +311,44 @@ func Transmit(rf *NRFTransmitter, a Address, data Payload) {
 	setCE(rf, true)
 }
 
+// SendCommand — synchronous method: send request and wait response or timeout
+func (rf *NRFTransmitter) SendCommand(a TranscieverModel.Address, data TranscieverModel.Payload) (ret TranscieverModel.Message) {
+	Transmit(rf, a, data)
+	// wait for transmission completes
+	<-rf.SendMessageStatus
+	/*select {
+	case <-time.After(2 * time.Millisecond):
+		panic(errors.New(fmt.Sprintf(
+			"callFunction.Transmit timeout, no irq TX_DS in 20ms after transmission. Address %v, payload %v",
+			a, fno, data,
+		)))
+	case <-rf.SendMessageStatus:
+		// ok
+	}//*/
+	Listen(rf, a)
+	timeoutChan := make(chan bool)
+	go func() {
+		<-time.After(10000 * time.Millisecond)
+		timeoutChan <- true
+	}()
+waitForResponse:
+	for {
+		select {
+		case message := <-rf.ReceiveMessage:
+			// message received
+			return message
+		case <-timeoutChan:
+			log.Info("nRFModel.SendCommand: listen timeout")
+			break waitForResponse
+		}
+	}
+	return TranscieverModel.Message{
+		Status: TranscieverModel.EMSSlaveTimeout,
+	}
+	//panic(errors.New("SendCommand timeout"))
+}
+
+// GoIdle — just turn off CE
 func GoIdle(rf *NRFTransmitter) {
 	rf.mutex.Lock()
 	defer rf.mutex.Unlock()

@@ -1,28 +1,11 @@
-package nRF_model
-
-type Address [5]byte
-type Payload []byte
-type Message struct {
-	Address Address
-	Payload Payload
-	pipe    byte
-	Status  EMessageStatus
-}
-
-type EMessageStatus byte
-
-const (
-	EMSNone        EMessageStatus = 0x00
-	EMSTransmitted                = 0x10
-	EMSReceived                   = 0x11
-	EMSNoAck                      = 0x80
-)
+package nRFModel
 
 // NRF-related stuff
 type Command byte
 type Register byte
 type Bit byte
 
+// nRF24L01 commands
 const (
 	CReadRegister        Command = 0x00
 	CWriteRegister               = 0x20
@@ -37,6 +20,7 @@ const (
 	CNop                         = 0xFF
 )
 
+// nRF24L01 registers and bits
 const (
 	RConfig    Register = 0x00
 	BMaskRxDr  Bit      = 6

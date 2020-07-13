@@ -2,23 +2,22 @@ package RFModel
 
 import (
 	"../TranscieverModel"
-	"../nRFModel"
 	"errors"
 	"fmt"
 	"time"
 )
 
-type DeviceKey nRF_model.Address
+type DeviceKey TranscieverModel.Address
 type Device struct {
-	Address      nRF_model.Address
+	Address      TranscieverModel.Address
 	LastUpdate   time.Time
 	UnitCount    uint
 	AllFunctions []UnitFunctionKey
 }
 
 type UnitFunctionKey struct {
-	uid TranscieverModel.UID
-	fno TranscieverModel.FuncNo
+	uid UID
+	fno FuncNo
 }
 type UnitFunction struct {
 	input  EDataType
@@ -28,8 +27,8 @@ type UnitFunction struct {
 var Devices = map[DeviceKey]*Device{}
 var UnitFunctions = map[UnitFunctionKey]UnitFunction{}
 
-func updateDeviceUnits(rf *RFModel, address nRF_model.Address) {
-	unitsCountResponse := callFunction(rf, TranscieverModel.UID{Address: address, Unit: 0}, FGetListOfUnitFunctions, []byte{})
+func updateDeviceUnits(rf *RFModel, address TranscieverModel.Address) {
+	unitsCountResponse := callFunction(rf, UID{Address: address, Unit: 0}, FGetListOfUnitFunctions, []byte{})
 	// validation of the request. Don't like that huge chunk here it has to go somewhere else(
 	if 1 != len(unitsCountResponse) {
 		panic(fmt.Errorf(
@@ -54,7 +53,7 @@ func updateDeviceUnits(rf *RFModel, address nRF_model.Address) {
 		AllFunctions: []UnitFunctionKey{},
 	}
 	for i := 0; i < int(unitsCountResponse[0]); i++ {
-		uid := TranscieverModel.UID{Address: address, Unit: byte(i)}
+		uid := UID{Address: address, Unit: byte(i)}
 		functionListResponse := callFunction(rf, uid, FGetListOfUnitFunctions, []byte{})
 		// fucking validation, it should go somewhere else(
 		if 0 != len(functionListResponse)%3 {
@@ -67,7 +66,7 @@ func updateDeviceUnits(rf *RFModel, address nRF_model.Address) {
 		}
 		// now parse the function list from the slave
 		for f := 0; f < len(functionListResponse); f += 3 {
-			key := UnitFunctionKey{uid: uid, fno: TranscieverModel.FuncNo(functionListResponse[f])}
+			key := UnitFunctionKey{uid: uid, fno: FuncNo(functionListResponse[f])}
 			UnitFunctions[key] = UnitFunction{
 				input:  EDataType(functionListResponse[f+1]),
 				output: EDataType(functionListResponse[f+2]),
@@ -78,7 +77,7 @@ func updateDeviceUnits(rf *RFModel, address nRF_model.Address) {
 
 }
 
-func checkDeviceUnits(rf *RFModel, uid TranscieverModel.UID) {
+func checkDeviceUnits(rf *RFModel, uid UID) {
 	if v, ok := Devices[DeviceKey(uid.Address)]; ok {
 		if 1*time.Hour > time.Now().Sub(v.LastUpdate) {
 			return

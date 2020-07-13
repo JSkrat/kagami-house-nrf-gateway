@@ -1,14 +1,21 @@
 package RFModel
 
 import (
-	"../TranscieverModel"
-	"../nRFModel"
 	"bytes"
 	"encoding/binary"
 	"errors"
 	"fmt"
-	"time"
+
+	"../TranscieverModel"
 )
+
+type UID struct {
+	Address TranscieverModel.Address
+	Unit    byte
+}
+type Variant interface{}
+
+type FuncNo byte
 
 const (
 	PacketLength       uint = 32
@@ -49,13 +56,13 @@ const (
 
 const (
 	// Unit 0, global device functions
-	F0SetNewSessionKey         TranscieverModel.FuncNo = 10
-	F0SetMACAddress                                    = 12
-	F0SetRFChannel                                     = 16
-	F0GetDeviceStatistics                              = 13
-	F0NOP                                              = 15
-	F0ResetTransactionId                               = 14
-	F0SetSlaveMode                                     = 17
+	F0SetNewSessionKey    FuncNo = 10
+	F0SetMACAddress              = 12
+	F0SetRFChannel               = 16
+	F0GetDeviceStatistics        = 13
+	F0NOP                        = 15
+	F0ResetTransactionId         = 14
+	F0SetSlaveMode               = 17
 	// per Unit functions
 	FGetListOfUnitFunctions = 0
 	FGetTextDescription     = 1
@@ -70,7 +77,7 @@ type PacketValidationError error
 
 var transactionId byte = 0
 
-func serializeRequest(rq *request) nRF_model.Payload {
+func serializeRequest(rq *request) TranscieverModel.Payload {
 	if MaxDataLengthRq < uint(rq.DataLength) {
 		panic(errors.New(fmt.Sprintf("too big DataLength %v", rq.DataLength)))
 	}
@@ -81,7 +88,7 @@ func serializeRequest(rq *request) nRF_model.Payload {
 	return buf.Bytes()[:PacketLength-MaxDataLengthRq+uint(rq.DataLength)]
 }
 
-func parseResponse(r *nRF_model.Payload) response {
+func parseResponse(r *TranscieverModel.Payload) response {
 	if PacketLength < uint(len(*r)) {
 		panic(errors.New(fmt.Sprintf("too big packet of length %v", len(*r))))
 	}
@@ -108,7 +115,7 @@ func (r response) Payload() []byte {
 	return ret
 }
 
-func createRequest(unitID byte, functionId byte, data []byte) request {
+func createRequest(unitID byte, FunctionID byte, data []byte) request {
 	defer func() { transactionId += 1 }()
 	var structData [MaxDataLengthRq]byte
 	copy(structData[:], data)
@@ -116,7 +123,7 @@ func createRequest(unitID byte, functionId byte, data []byte) request {
 		Version:       0,
 		TransactionID: transactionId,
 		UnitID:        unitID,
-		FunctionID:    functionId,
+		FunctionID:    FunctionID,
 		Data:          structData,
 		DataLength:    byte(len(data)),
 	}
@@ -132,7 +139,7 @@ func basicValidateResponse(r *response) bool {
 	return true
 }
 
-func validateResponse(to *nRF_model.Address, rq *request, rs *nRF_model.Message) (retResp response, retStatus bool) {
+func validateResponse(to *TranscieverModel.Address, rq *request, rs *TranscieverModel.Message) (retResp response, retStatus bool) {
 	retResp = parseResponse(&rs.Payload)
 	defer func() {
 		if r := recover(); r != nil {
@@ -154,45 +161,23 @@ func validateResponse(to *nRF_model.Address, rq *request, rs *nRF_model.Message)
 	return retResp, true
 }
 
-func callFunction(rf *RFModel, uid TranscieverModel.UID, fno TranscieverModel.FuncNo, payload nRF_model.Payload) nRF_model.Payload {
+func callFunction(rf *RFModel, uid UID, fno FuncNo, payload TranscieverModel.Payload) TranscieverModel.Payload {
 	rq := createRequest(uid.Unit, byte(fno), payload)
 	rqSerialized := serializeRequest(&rq)
 	for i := 3; 0 <= i; i-- {
 		log.Info(fmt.Sprintf("callFunction try %v", i))
-		nRF_model.Transmit(&rf.transmitter, uid.Address, rqSerialized)
-		// wait for transmission completes
-		<-rf.transmitter.SendMessageStatus
-		/*select {
-		case <-time.After(2 * time.Millisecond):
-			panic(errors.New(fmt.Sprintf(
-				"callFunction.Transmit timeout, no irq TX_DS in 20ms after transmission. UID %v, fno %v, payload %v",
-				uid, fno, payload,
-			)))
-		case <-rf.transmitter.SendMessageStatus:
-			// ok
-		}//*/
-		nRF_model.Listen(&rf.transmitter, uid.Address)
-		timeoutChan := make(chan bool)
-		go func() {
-			<-time.After(10000 * time.Millisecond)
-			timeoutChan <- true
-		}()
-	waitForResponse:
-		for {
-			select {
-			case message := <-rf.transmitter.ReceiveMessage:
-				// message received
-				if pm, ok := validateResponse(&uid.Address, &rq, &message); ok {
-					// now we have received, parsed and validated message from the device
-					if 0 != pm.Code {
-						panic(errors.New(fmt.Sprintf("error code %v", pm.Code)))
-					}
-					return pm.Payload()
+		message := rf.transmitter.SendCommand(uid.Address, rqSerialized)
+		if TranscieverModel.EMSDataPacket == message.Status {
+			// message received
+			if pm, ok := validateResponse(&uid.Address, &rq, &message); ok {
+				// now we have received, parsed and validated message from the device
+				if 0 != pm.Code {
+					panic(errors.New(fmt.Sprintf("error code %v", pm.Code)))
 				}
-			case <-timeoutChan:
-				log.Info("RFModel.Protocol.callFucntion: listen timeout")
-				break waitForResponse
+				return pm.Payload()
 			}
+		} else {
+			log.Info("RFModel.Protocol.callFucntion: listen timeout")
 		}
 	}
 	panic(errors.New(fmt.Sprintf(
