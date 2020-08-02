@@ -1,36 +1,46 @@
 package RFModel
 
 import (
-	"../TranscieverModel"
-	"errors"
 	"fmt"
 	"time"
+
+	"../TranscieverModel"
 )
 
+// DeviceKey ...
 type DeviceKey TranscieverModel.Address
+
+// Device represents a device with one transciever with multiple units in it
 type Device struct {
 	Address      TranscieverModel.Address
 	LastUpdate   time.Time
 	UnitCount    uint
+	BuildNumber  uint32
 	AllFunctions []UnitFunctionKey
 }
 
+// UnitFunctionKey ...
 type UnitFunctionKey struct {
 	uid UID
 	fno FuncNo
 }
+
+// UnitFunction ...
 type UnitFunction struct {
-	input  EDataType
-	output EDataType
+	read  EDataType
+	write EDataType
 }
 
+// Devices all known devices
 var Devices = map[DeviceKey]*Device{}
+
+// UnitFunctions all known functions of all known devices
 var UnitFunctions = map[UnitFunctionKey]UnitFunction{}
 
 func updateDeviceUnits(rf *RFModel, address TranscieverModel.Address) {
 	unitsCountResponse := callFunction(rf, UID{Address: address, Unit: 0}, FGetListOfUnitFunctions, []byte{})
 	// validation of the request. Don't like that huge chunk here it has to go somewhere else(
-	if 1 != len(unitsCountResponse) {
+	if 5 != len(unitsCountResponse) {
 		panic(fmt.Errorf(
 			"incorrect response %v from the device %v Unit 0 function get number of internal units %v",
 			unitsCountResponse,
@@ -52,24 +62,24 @@ func updateDeviceUnits(rf *RFModel, address TranscieverModel.Address) {
 		UnitCount:    uint(unitsCountResponse[0]),
 		AllFunctions: []UnitFunctionKey{},
 	}
-	for i := 0; i < int(unitsCountResponse[0]); i++ {
+	for i := 1; i <= int(unitsCountResponse[0]); i++ {
 		uid := UID{Address: address, Unit: byte(i)}
 		functionListResponse := callFunction(rf, uid, FGetListOfUnitFunctions, []byte{})
 		// fucking validation, it should go somewhere else(
-		if 0 != len(functionListResponse)%3 {
-			panic(errors.New(fmt.Sprintf(
+		if 0 != len(functionListResponse)%2 {
+			panic(fmt.Errorf(
 				"incorect rsponse %v from the Unit %v function get list of Unit functions %v",
 				functionListResponse,
 				uid,
 				FGetListOfUnitFunctions,
-			)))
+			))
 		}
 		// now parse the function list from the slave
-		for f := 0; f < len(functionListResponse); f += 3 {
+		for f := 0; f < len(functionListResponse); f += 2 {
 			key := UnitFunctionKey{uid: uid, fno: FuncNo(functionListResponse[f])}
 			UnitFunctions[key] = UnitFunction{
-				input:  EDataType(functionListResponse[f+1]),
-				output: EDataType(functionListResponse[f+2]),
+				read:  EDataType(functionListResponse[f+1] >> 4),
+				write: EDataType(functionListResponse[f+1] & 0x0F),
 			}
 			Devices[deviceKey].AllFunctions = append(Devices[deviceKey].AllFunctions, key)
 		}

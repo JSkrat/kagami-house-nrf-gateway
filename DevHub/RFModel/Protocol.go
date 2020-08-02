@@ -9,14 +9,19 @@ import (
 	"../TranscieverModel"
 )
 
+// UID unit ID
 type UID struct {
 	Address TranscieverModel.Address
 	Unit    byte
 }
+
+// Variant ...
 type Variant interface{}
 
+// FuncNo unit function id
 type FuncNo byte
 
+// for RF packet parsing
 const (
 	PacketLength       uint = 32
 	RequestHeaderSize  uint = 4
@@ -42,8 +47,10 @@ type response struct {
 	DataLength    byte
 }
 
+// EDataType ...
 type EDataType byte
 
+// EDataType enum
 const (
 	EDNone        EDataType = 0
 	EDBool                  = 1
@@ -54,6 +61,7 @@ const (
 	EDUnspecified           = 0xF
 )
 
+// RF functions
 const (
 	// Unit 0, global device functions
 	F0SetNewSessionKey    FuncNo = 10
@@ -61,7 +69,7 @@ const (
 	F0SetRFChannel               = 16
 	F0GetDeviceStatistics        = 13
 	F0NOP                        = 15
-	F0ResetTransactionId         = 14
+	F0ResetTransactionID         = 14
 	F0SetSlaveMode               = 17
 	// per Unit functions
 	FGetListOfUnitFunctions = 0
@@ -69,17 +77,18 @@ const (
 	FSetTextDescription     = 2
 )
 
+// PacketValidationError distinguishable panic
 type PacketValidationError error
 
 /*type Payload interface {
 	Payload() []byte
 }*/
 
-var transactionId byte = 0
+var transactionID byte = 0
 
 func serializeRequest(rq *request) TranscieverModel.Payload {
 	if MaxDataLengthRq < uint(rq.DataLength) {
-		panic(errors.New(fmt.Sprintf("too big DataLength %v", rq.DataLength)))
+		panic(fmt.Errorf("too big DataLength %v", rq.DataLength))
 	}
 	buf := bytes.Buffer{}
 	if err := binary.Write(&buf, binary.LittleEndian, rq); err != nil {
@@ -90,7 +99,7 @@ func serializeRequest(rq *request) TranscieverModel.Payload {
 
 func parseResponse(r *TranscieverModel.Payload) response {
 	if PacketLength < uint(len(*r)) {
-		panic(errors.New(fmt.Sprintf("too big packet of length %v", len(*r))))
+		panic(fmt.Errorf("too big packet of length %v", len(*r)))
 	}
 	var ret response
 	buf := bytes.Buffer{}
@@ -109,19 +118,19 @@ func (r request) Payload() []byte {
 	return ret
 }
 
-func (r response) Payload() []byte {
-	var ret []byte
-	copy(ret[:], r.Data[:r.DataLength])
+func (r response) Payload() (ret []byte) {
+	//ret = []byte{}
+	ret = r.Data[:r.DataLength]
 	return ret
 }
 
 func createRequest(unitID byte, FunctionID byte, data []byte) request {
-	defer func() { transactionId += 1 }()
+	defer func() { transactionID += 1 }()
 	var structData [MaxDataLengthRq]byte
 	copy(structData[:], data)
 	return request{
 		Version:       0,
-		TransactionID: transactionId,
+		TransactionID: transactionID,
 		UnitID:        unitID,
 		FunctionID:    FunctionID,
 		Data:          structData,
@@ -133,7 +142,7 @@ func basicValidateResponse(r *response) bool {
 	if 0 != r.Version {
 		return false
 	}
-	if transactionId-1 != r.TransactionID {
+	if transactionID-1 != r.TransactionID {
 		return false
 	}
 	return true
@@ -172,16 +181,17 @@ func callFunction(rf *RFModel, uid UID, fno FuncNo, payload TranscieverModel.Pay
 			if pm, ok := validateResponse(&uid.Address, &rq, &message); ok {
 				// now we have received, parsed and validated message from the device
 				if 0 != pm.Code {
-					panic(errors.New(fmt.Sprintf("error code %v", pm.Code)))
+					panic(fmt.Errorf("error code %v", pm.Code))
 				}
+				log.Info(fmt.Sprintf("callFunction uid %v, fno %v, payload %v, response %v", uid, fno, payload, pm.Payload()))
 				return pm.Payload()
 			}
 		} else {
 			log.Info("RFModel.Protocol.callFucntion: listen timeout")
 		}
 	}
-	panic(errors.New(fmt.Sprintf(
+	panic(fmt.Errorf(
 		"callFunction.Listen: response timeout 3 times in a row for uid %v, fno %v, payload %v. Packet is %v",
 		uid, fno, payload, rqSerialized,
-	)))
+	))
 }

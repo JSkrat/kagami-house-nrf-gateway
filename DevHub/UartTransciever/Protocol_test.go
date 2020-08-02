@@ -1,4 +1,4 @@
-package UMModel
+package UartTransciever
 
 import (
 	"reflect"

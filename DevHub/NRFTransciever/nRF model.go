@@ -1,4 +1,4 @@
-package nRFModel
+package NRFTransciever
 
 import (
 	"errors"
@@ -108,7 +108,8 @@ func getPipeNumberReceived(rf *NRFTransmitter) byte {
 	return ret
 }
 
-func OpenTransmitter(rf *NRFTransmitter, settings TransmitterSettings) {
+// Init ...
+func Init(rf *NRFTransmitter, settings TransmitterSettings) {
 	rf.mutex.Lock()
 	defer rf.mutex.Unlock()
 	// logging

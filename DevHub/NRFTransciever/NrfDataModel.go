@@ -1,4 +1,4 @@
-package nRFModel
+package NRFTransciever
 
 // NRF-related stuff
 type Command byte

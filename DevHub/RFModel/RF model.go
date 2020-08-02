@@ -1,7 +1,6 @@
 package RFModel
 
 import (
-	"errors"
 	"fmt"
 	"os"
 
@@ -9,6 +8,7 @@ import (
 	"github.com/sirupsen/logrus"
 )
 
+// RFModel handler
 type RFModel struct {
 	//TranscieverModel.Model
 	transmitter TranscieverModel.Transmitter
@@ -16,6 +16,7 @@ type RFModel struct {
 
 var log = logrus.New()
 
+// Init ...
 func Init(rf *RFModel, transmitter TranscieverModel.Transmitter) {
 	// logging
 	log.Formatter = new(logrus.TextFormatter)
@@ -26,19 +27,21 @@ func Init(rf *RFModel, transmitter TranscieverModel.Transmitter) {
 	//rf.transmitter.ReceiveMessage = make(chan nRF_model.Message)
 }
 
+// Close ...
 func (rf *RFModel) Close() {
 	rf.transmitter.Close()
 }
 
 func checkPayload(payload TranscieverModel.Payload, length int, uid UID, fno FuncNo) {
 	if len(payload) != length {
-		panic(errors.New(fmt.Sprintf(
+		panic(fmt.Errorf(
 			"payload (%v) length does not correspond data type length %v for uid %v fno %v",
 			payload, length, uid, fno,
-		)))
+		))
 	}
 }
 
+// ReadFunction read from the unit
 func (rf *RFModel) ReadFunction(uid UID, fno FuncNo) Variant {
 	// check all device units and functions data types to cast
 	checkDeviceUnits(rf, uid)
@@ -46,7 +49,7 @@ func (rf *RFModel) ReadFunction(uid UID, fno FuncNo) Variant {
 	dataType := UnitFunctions[UnitFunctionKey{
 		uid: uid,
 		fno: fno,
-	}].output
+	}].read
 	switch dataType {
 	case EDNone:
 		{
@@ -57,14 +60,13 @@ func (rf *RFModel) ReadFunction(uid UID, fno FuncNo) Variant {
 			checkPayload(payload, 1, uid, fno)
 			if 0 == payload[0] {
 				return false
-			} else {
-				return true
 			}
+			return true
 		}
 	case EDByte:
 		{
 			checkPayload(payload, 1, uid, fno)
-			return int8(payload[0])
+			return uint8(payload[0])
 		}
 	case EDInt32:
 		{
@@ -83,16 +85,17 @@ func (rf *RFModel) ReadFunction(uid UID, fno FuncNo) Variant {
 			return payload
 		}
 	}
-	panic(errors.New(fmt.Sprintf("unexpected data type %v for uid %v fno %v payload %v", dataType, uid, fno, payload)))
+	panic(fmt.Errorf("unexpected data type %v for uid %v fno %v payload %v", dataType, uid, fno, payload))
 }
 
+// WriteFunction write to the unit
 func (rf *RFModel) WriteFunction(uid UID, fno FuncNo, value Variant) {
 	checkDeviceUnits(rf, uid)
 	var payload TranscieverModel.Payload
 	dataType := UnitFunctions[UnitFunctionKey{
 		uid: uid,
 		fno: fno,
-	}].input
+	}].write
 	switch dataType {
 	case EDBool:
 		{
@@ -104,7 +107,7 @@ func (rf *RFModel) WriteFunction(uid UID, fno FuncNo, value Variant) {
 		}
 	case EDByte:
 		{
-			payload = TranscieverModel.Payload{byte(value.(int))}
+			payload = TranscieverModel.Payload{byte(value.(uint8))}
 		}
 	case EDInt32:
 		{
@@ -125,7 +128,7 @@ func (rf *RFModel) WriteFunction(uid UID, fno FuncNo, value Variant) {
 			payload = value.([]byte)
 		}
 	default:
-		panic(errors.New(fmt.Sprintf("unexpected input data format %v for uid %v fno %v value %v", dataType, uid, fno, value)))
+		panic(fmt.Errorf("unexpected input data format %v for uid %v fno %v value %v", dataType, uid, fno, value))
 	}
 	callFunction(rf, uid, fno, payload)
 }

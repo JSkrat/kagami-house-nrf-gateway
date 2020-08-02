@@ -1,4 +1,4 @@
-package UMModel
+package UartTransciever
 
 import (
 	"fmt"
@@ -28,8 +28,8 @@ type TransmitterSettings struct {
 	Speed    int
 }
 
-// OpenTransmitter ...
-func OpenTransmitter(tr *UMTransmitter, settings TransmitterSettings) {
+// Init ...
+func Init(tr *UMTransmitter, settings TransmitterSettings) {
 	tr.mutex.Lock()
 	defer tr.mutex.Unlock()
 	log.Formatter = new(logrus.TextFormatter)
@@ -84,7 +84,7 @@ func uartTransaction(rf *UMTransmitter, data []byte) []byte {
 				break
 			}
 		}
-		log.Info(fmt.Sprintf("uartTransaction(%v) data %v", data, bigBuf))
+		log.Debug(fmt.Sprintf("uartTransaction(%v) data %v", data, bigBuf))
 		receive <- bigBuf
 	}()
 	timeout := make(chan bool)

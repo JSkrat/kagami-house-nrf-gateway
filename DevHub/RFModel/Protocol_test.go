@@ -1,7 +1,10 @@
 package RFModel
 
-import "testing"
-import "../nRFModel"
+import (
+	"testing"
+
+	"../TranscieverModel"
+)
 
 func Assert(t *testing.T, condition bool, errorMessage string) {
 	if !condition {
@@ -36,7 +39,7 @@ func TestBuildRequest(t *testing.T) {
 }
 
 func TestParseResponse(t *testing.T) {
-	rBytes := nRF_model.Payload{1, 2, 3}
+	rBytes := TranscieverModel.Payload{1, 2, 3}
 	rStruct := parseResponse(&rBytes)
 	Assert(t, rBytes[0] == rStruct.Version, "version is wrong")
 	Assert(t, rBytes[1] == rStruct.TransactionID, "transaction id is wrong")
