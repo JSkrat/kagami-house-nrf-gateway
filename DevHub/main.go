@@ -6,6 +6,7 @@ import (
 	"./NRFTransciever"
 	"./RFModel"
 	"./UartTransciever"
+	//"./Cache"
 	"gopkg.in/ini.v1"
 )
 
@@ -41,7 +42,7 @@ func main() {
 		RFModel.Init(&model, &transmitter)
 	}
 	defer model.Close()
-	uid := RFModel.UID{Address: [5]byte{0xAA, 0xAA, 0xAA, 0xAA, 0x55}, Unit: 1}
+	uid := RFModel.UID{Address: [5]byte{0xAA, 0xAA, 0xAA, 0xAA, 0x01}, Unit: 1}
 	model.WriteFunction(uid, 0x19, byte(0xE1))
 	response := model.ReadFunction(uid, 0x18).(byte)
 	fmt.Printf("Wrote 0xE1, read %v", response)
