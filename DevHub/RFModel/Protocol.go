@@ -183,7 +183,7 @@ func callFunction(rf *RFModel, uid UID, fno FuncNo, payload TranscieverModel.Pay
 				if 0 != pm.Code {
 					panic(fmt.Errorf("error code %v", pm.Code))
 				}
-				log.Info(fmt.Sprintf("callFunction uid %v, fno %v, payload %v, response %v", uid, fno, payload, pm.Payload()))
+				log.Info(fmt.Sprintf("callFunction uid %v, FNo %v, payload %v, response %v", uid, fno, payload, pm.Payload()))
 				return pm.Payload()
 			}
 		} else {
@@ -191,7 +191,7 @@ func callFunction(rf *RFModel, uid UID, fno FuncNo, payload TranscieverModel.Pay
 		}
 	}
 	panic(fmt.Errorf(
-		"callFunction.Listen: response timeout 3 times in a row for uid %v, fno %v, payload %v. Packet is %v",
+		"callFunction.Listen: response timeout 3 times in a row for uid %v, FNo %v, payload %v. Packet is %v",
 		uid, fno, payload, rqSerialized,
 	))
 }

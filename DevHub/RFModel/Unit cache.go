@@ -21,8 +21,8 @@ type Device struct {
 
 // UnitFunctionKey ...
 type UnitFunctionKey struct {
-	uid UID
-	fno FuncNo
+	UID UID
+	FNo FuncNo
 }
 
 // UnitFunction ...
@@ -76,7 +76,7 @@ func updateDeviceUnits(rf *RFModel, address TranscieverModel.Address) {
 		}
 		// now parse the function list from the slave
 		for f := 0; f < len(functionListResponse); f += 2 {
-			key := UnitFunctionKey{uid: uid, fno: FuncNo(functionListResponse[f])}
+			key := UnitFunctionKey{UID: uid, FNo: FuncNo(functionListResponse[f])}
 			UnitFunctions[key] = UnitFunction{
 				read:  EDataType(functionListResponse[f+1] >> 4),
 				write: EDataType(functionListResponse[f+1] & 0x0F),
