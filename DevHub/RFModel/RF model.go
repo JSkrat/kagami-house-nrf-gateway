@@ -45,7 +45,7 @@ func checkPayload(payload TranscieverModel.Payload, length int, uid UID, fno Fun
 func (rf *RFModel) ReadFunction(uid UID, fno FuncNo) Variant {
 	// check all device units and functions data types to cast
 	checkDeviceUnits(rf, uid)
-	payload := callFunction(rf, uid, fno, []byte{})
+	payload := rf.CallFunction(uid, fno, []byte{})
 	dataType := UnitFunctions[UnitFunctionKey{
 		UID: uid,
 		FNo: fno,
@@ -130,5 +130,5 @@ func (rf *RFModel) WriteFunction(uid UID, fno FuncNo, value Variant) {
 	default:
 		panic(fmt.Errorf("unexpected input data format %v for uid %v FNo %v value %v", dataType, uid, fno, value))
 	}
-	callFunction(rf, uid, fno, payload)
+	rf.CallFunction(uid, fno, payload)
 }

@@ -170,11 +170,11 @@ func validateResponse(to *TranscieverModel.Address, rq *request, rs *Transciever
 	return retResp, true
 }
 
-func callFunction(rf *RFModel, uid UID, fno FuncNo, payload TranscieverModel.Payload) TranscieverModel.Payload {
+func (rf *RFModel) CallFunction(uid UID, fno FuncNo, payload TranscieverModel.Payload) TranscieverModel.Payload {
 	rq := createRequest(uid.Unit, byte(fno), payload)
 	rqSerialized := serializeRequest(&rq)
 	for i := 3; 0 <= i; i-- {
-		log.Info(fmt.Sprintf("callFunction try %v", i))
+		log.Info(fmt.Sprintf("CallFunction try %v", i))
 		message := rf.transmitter.SendCommand(uid.Address, rqSerialized)
 		if TranscieverModel.EMSDataPacket == message.Status {
 			// message received
@@ -183,7 +183,7 @@ func callFunction(rf *RFModel, uid UID, fno FuncNo, payload TranscieverModel.Pay
 				if 0 != pm.Code {
 					panic(fmt.Errorf("error code %v", pm.Code))
 				}
-				log.Info(fmt.Sprintf("callFunction uid %v, FNo %v, payload %v, response %v", uid, fno, payload, pm.Payload()))
+				log.Info(fmt.Sprintf("CallFunction uid %v, FNo %v, payload %v, response %v", uid, fno, payload, pm.Payload()))
 				return pm.Payload()
 			}
 		} else {
@@ -191,7 +191,7 @@ func callFunction(rf *RFModel, uid UID, fno FuncNo, payload TranscieverModel.Pay
 		}
 	}
 	panic(fmt.Errorf(
-		"callFunction.Listen: response timeout 3 times in a row for uid %v, FNo %v, payload %v. Packet is %v",
+		"CallFunction.Listen: response timeout 3 times in a row for uid %v, FNo %v, payload %v. Packet is %v",
 		uid, fno, payload, rqSerialized,
 	))
 }

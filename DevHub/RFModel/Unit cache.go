@@ -10,7 +10,7 @@ import (
 // DeviceKey ...
 type DeviceKey TranscieverModel.Address
 
-// Device represents a device with one transciever with multiple units in it
+// Device represents a device with one transceiver with multiple units in it
 type Device struct {
 	Address      TranscieverModel.Address
 	LastUpdate   time.Time
@@ -38,7 +38,7 @@ var Devices = map[DeviceKey]*Device{}
 var UnitFunctions = map[UnitFunctionKey]UnitFunction{}
 
 func updateDeviceUnits(rf *RFModel, address TranscieverModel.Address) {
-	unitsCountResponse := callFunction(rf, UID{Address: address, Unit: 0}, FGetListOfUnitFunctions, []byte{})
+	unitsCountResponse := rf.CallFunction(UID{Address: address, Unit: 0}, FGetListOfUnitFunctions, []byte{})
 	// validation of the request. Don't like that huge chunk here it has to go somewhere else(
 	if 5 != len(unitsCountResponse) {
 		panic(fmt.Errorf(
@@ -64,7 +64,7 @@ func updateDeviceUnits(rf *RFModel, address TranscieverModel.Address) {
 	}
 	for i := 1; i <= int(unitsCountResponse[0]); i++ {
 		uid := UID{Address: address, Unit: byte(i)}
-		functionListResponse := callFunction(rf, uid, FGetListOfUnitFunctions, []byte{})
+		functionListResponse := rf.CallFunction(uid, FGetListOfUnitFunctions, []byte{})
 		// fucking validation, it should go somewhere else(
 		if 0 != len(functionListResponse)%2 {
 			panic(fmt.Errorf(
