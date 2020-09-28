@@ -11,11 +11,20 @@
 package Cache
 
 import (
+	"github.com/sirupsen/logrus"
+	"os"
 	"sync"
 	"time"
 
 	"../RFModel"
 )
+
+type Cache struct {
+	rf          *RFModel.RFModel
+	log         *logrus.Logger
+	cache       map[Key]*Value
+	deviceCache map[DeviceKey]*DeviceState
+}
 
 type State byte
 
@@ -38,75 +47,80 @@ type DeviceKey RFModel.DeviceKey
 
 // Value — either read value, or write value. One item per function
 type Value struct {
-	ReadValue       string
-	LastUpdate      time.Time // when it was updated from the unit last time
-	LastRequest     time.Time // when it was read from cache last time
-	AccessFrequency time.Time
-	WriteValue      string
-	WriteState      WriteState
-	lock            sync.Mutex
+	ReadValue    string
+	LastUpdate   time.Time     // when it was updated from the unit last time
+	LastRequest  time.Time     // when it was read from cache last time
+	AccessPeriod time.Duration // update if LastUpdate + AccessPeriod is bigger than time.Now()
+	WriteValue   string
+	WriteState   WriteState
+	lock         sync.Mutex
 }
 
 type DeviceState struct {
 	State State
 }
 
-var cache = map[Key]*Value{}
-var deviceCache = map[DeviceKey]*DeviceState{}
-
-func ensureDeviceInCache(key DeviceKey) {
-	_, ok := deviceCache[key]
-	if !ok {
-		value := DeviceState{State: SOffline}
-		deviceCache[key] = &value
-	}
-}
-
-func ensureKeyInCache(key Key, isRead bool) {
-	ensureDeviceInCache(DeviceKey(key.UID.Address))
-	_, ok := cache[key]
-	if ok {
-		if isRead {
-			// check if it is actual
-			// update read access time
-			cache[key].LastRequest = time.Now()
-		}
-	} else {
-		value := Value{
-			LastRequest: time.Now(),
-		}
-		cache[key] = &value
-	}
+func Init(self *Cache, rf *RFModel.RFModel) {
+	self.log = logrus.New()
+	self.log.Formatter = new(logrus.TextFormatter)
+	self.log.Level = logrus.TraceLevel
+	self.log.Out = os.Stdout
+	self.rf = rf
 }
 
 // RegisterItem put requested uid/fno pair for read update routine
-func RegisterItem(uid RFModel.UID, fno RFModel.FuncNo) {
+func (c *Cache) RegisterItem(uid RFModel.UID, fno RFModel.FuncNo) {
 	key := Key{UID: uid, FNo: fno}
-	ensureKeyInCache(key, true)
+	c.ensureKeyExists(key, true)
 }
 
 // GetCached return data immediately, no async operations before answer
 // should never panic
 // in case device is offline function will return default value ("")
-func GetCached(uid RFModel.UID, fno RFModel.FuncNo) (value string, state State, timestamp time.Time) {
+func (c *Cache) GetCached(uid RFModel.UID, fno RFModel.FuncNo) (value string, state State, timestamp time.Time) {
 	key := Key{UID: uid, FNo: fno}
-	ensureKeyInCache(key, true)
-	cache[key].lock.Lock()
-	defer cache[key].lock.Unlock()
-	value = cache[key].ReadValue
-	state = deviceCache[DeviceKey(key.UID.Address)].State
+	c.ensureKeyExists(key, true)
+	c.cache[key].lock.Lock()
+	defer c.cache[key].lock.Unlock()
+	value = c.cache[key].ReadValue
+	state = c.deviceCache[DeviceKey(key.UID.Address)].State
 	if SOffline == state {
 		value = ""
 	}
-	return value, state, cache[key].LastUpdate
+	return value, state, c.cache[key].LastUpdate
 }
 
 // SetCached return immediately
-func SetCached(uid RFModel.UID, fno RFModel.FuncNo, value string) {
+func (c *Cache) SetCached(uid RFModel.UID, fno RFModel.FuncNo, value string) {
 	key := Key{UID: uid, FNo: fno}
-	ensureKeyInCache(key, false)
-	cache[key].lock.Lock()
-	defer cache[key].lock.Unlock()
-	cache[key].WriteValue = value
-	cache[key].WriteState = WSPending
+	c.ensureKeyExists(key, false)
+	c.cache[key].lock.Lock()
+	defer c.cache[key].lock.Unlock()
+	c.cache[key].WriteValue = value
+	c.cache[key].WriteState = WSPending
+}
+
+func (c *Cache) ensureDeviceExists(key DeviceKey) {
+	_, ok := c.deviceCache[key]
+	if !ok {
+		value := DeviceState{State: SOffline}
+		c.deviceCache[key] = &value
+	}
+}
+
+func (c *Cache) ensureKeyExists(key Key, isRead bool) {
+	c.ensureDeviceExists(DeviceKey(key.UID.Address))
+	_, ok := c.cache[key]
+	if ok {
+		if isRead {
+			// check if it is actual
+			// update read access time
+			c.cache[key].LastRequest = time.Now()
+		}
+	} else {
+		value := Value{
+			LastRequest: time.Now(),
+		}
+		c.cache[key] = &value
+	}
 }
