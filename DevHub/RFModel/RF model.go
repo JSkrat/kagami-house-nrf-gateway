@@ -34,10 +34,13 @@ func (rf *RFModel) Close() {
 
 func checkPayload(payload TranscieverModel.Payload, length int, uid UID, fno FuncNo) {
 	if len(payload) != length {
-		panic(fmt.Errorf(
-			"payload (%v) length does not correspond data type length %v for uid %v FNo %v",
-			payload, length, uid, fno,
-		))
+		panic(Error{
+			Error: fmt.Errorf(
+				"payload (%v) length does not correspond data type length %v for uid %v FNo %v",
+				payload, length, uid, fno,
+			),
+			Type: EBadResponse,
+		})
 	}
 }
 
@@ -86,7 +89,10 @@ func (rf *RFModel) ReadFunction(uid UID, fno FuncNo) Variant {
 			return payload
 		}
 	}
-	panic(fmt.Errorf("unexpected data type %v for uid %v FNo %v payload %v", dataType, uid, fno, payload))
+	panic(Error{
+		Error: fmt.Errorf("unexpected data type %v for uid %v FNo %v payload %v", dataType, uid, fno, payload),
+		Type:  EGeneral,
+	})
 }
 
 // WriteFunction write to the unit
@@ -130,7 +136,10 @@ func (rf *RFModel) WriteFunction(uid UID, fno FuncNo, value Variant) {
 			payload = value.([]byte)
 		}
 	default:
-		panic(fmt.Errorf("unexpected input data format %v for uid %v FNo %v value %v", dataType, uid, fno, value))
+		panic(Error{
+			Error: fmt.Errorf("unexpected input data format %v for uid %v FNo %v value %v", dataType, uid, fno, value),
+			Type:  EGeneral,
+		})
 	}
 	rf.CallFunction(uid, fno, payload)
 }

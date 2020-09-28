@@ -11,7 +11,7 @@ import (
 // update all read values according to their access frequency
 func (c *Cache) updateRoutine() {
 	// update device states first by pinging unit 0 function 0
-	for key, _ := range c.deviceCache {
+	for key := range c.deviceCache {
 		if c.probeDevice(key) {
 			c.deviceCache[key].State = SOnline
 		} else {

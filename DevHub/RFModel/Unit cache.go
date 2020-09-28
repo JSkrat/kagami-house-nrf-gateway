@@ -32,16 +32,28 @@ var Devices = map[DeviceAddress]*Device{}
 // UnitFunctions all known functions of all known devices
 var UnitFunctions = map[UnitFunctionKey]UnitFunction{}
 
+func checkDeviceUnits(rf *RFModel, uid UID) {
+	if v, ok := Devices[uid.Address]; ok {
+		if 1*time.Hour > time.Now().Sub(v.LastUpdate) {
+			return
+		}
+	}
+	updateDeviceUnits(rf, uid.Address)
+}
+
 func updateDeviceUnits(rf *RFModel, address DeviceAddress) {
 	unitsCountResponse := rf.CallFunction(UID{Address: address, Unit: 0}, FGetListOfUnitFunctions, []byte{})
 	// validation of the request. Don't like that huge chunk here it has to go somewhere else(
 	if 5 != len(unitsCountResponse) {
-		panic(fmt.Errorf(
-			"incorrect response %v from the device %v Unit 0 function get number of internal units %v",
-			unitsCountResponse,
-			address,
-			FGetListOfUnitFunctions,
-		))
+		panic(Error{
+			Error: fmt.Errorf(
+				"incorrect response %v from the device %v Unit 0 function get number of internal units %v",
+				unitsCountResponse,
+				address,
+				FGetListOfUnitFunctions,
+			),
+			Type: EBadResponse,
+		})
 	}
 	// todo get device statistics here too
 	// delete all Unit functions before re-population
@@ -61,12 +73,15 @@ func updateDeviceUnits(rf *RFModel, address DeviceAddress) {
 		functionListResponse := rf.CallFunction(uid, FGetListOfUnitFunctions, []byte{})
 		// fucking validation, it should go somewhere else(
 		if 0 != len(functionListResponse)%2 {
-			panic(fmt.Errorf(
-				"incorect rsponse %v from the Unit %v function get list of Unit functions %v",
-				functionListResponse,
-				uid,
-				FGetListOfUnitFunctions,
-			))
+			panic(Error{
+				Error: fmt.Errorf(
+					"incorect rsponse %v from the Unit %v function get list of Unit functions %v",
+					functionListResponse,
+					uid,
+					FGetListOfUnitFunctions,
+				),
+				Type: EBadResponse,
+			})
 		}
 		// now parse the function list from the slave
 		for f := 0; f < len(functionListResponse); f += 2 {
@@ -79,13 +94,4 @@ func updateDeviceUnits(rf *RFModel, address DeviceAddress) {
 		}
 	}
 
-}
-
-func checkDeviceUnits(rf *RFModel, uid UID) {
-	if v, ok := Devices[uid.Address]; ok {
-		if 1*time.Hour > time.Now().Sub(v.LastUpdate) {
-			return
-		}
-	}
-	updateDeviceUnits(rf, uid.Address)
 }
