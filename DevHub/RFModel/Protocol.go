@@ -187,6 +187,7 @@ func validateResponse(to *DeviceAddress, rq *request, rs *TranscieverModel.Messa
 
 // CallFunction is basic api for RFModel
 // TODO shall catch and handle all the transceiver panics
+// TODO retry 3 times on any error
 // may panic by its own
 func (rf *RFModel) CallFunction(uid UID, fno FuncNo, payload TranscieverModel.Payload) TranscieverModel.Payload {
 	rq := createRequest(uid.Unit, byte(fno), payload)

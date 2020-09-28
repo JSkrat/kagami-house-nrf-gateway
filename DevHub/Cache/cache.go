@@ -31,6 +31,7 @@ type State byte
 const (
 	SOffline State = 0
 	SOnline        = 1
+	SError         = 2 // should be treated the same way as offline, but it is when slave firmware behaves incorrectly
 )
 
 type WriteState byte
@@ -84,7 +85,7 @@ func (c *Cache) GetCached(uid RFModel.UID, fno RFModel.FuncNo) (value string, st
 	defer c.cache[key].lock.Unlock()
 	value = c.cache[key].ReadValue
 	state = c.deviceCache[DeviceKey(key.UID.Address)].State
-	if SOffline == state {
+	if SOnline != state {
 		value = ""
 	}
 	return value, state, c.cache[key].LastUpdate

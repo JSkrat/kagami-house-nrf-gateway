@@ -37,7 +37,12 @@ func (c *Cache) performWrite(key Key) {
 	defer c.cache[key].lock.Unlock()
 	defer func() {
 		if r := recover(); r != nil {
-			c.deviceCache[DeviceKey(key.UID.Address)].State = SOffline
+			switch r.(RFModel.Error).Type {
+			case RFModel.EDeviceTimeout:
+				c.deviceCache[DeviceKey(key.UID.Address)].State = SOffline
+			default:
+				c.deviceCache[DeviceKey(key.UID.Address)].State = SError
+			}
 			// we should generate event here
 		}
 	}()
