@@ -9,9 +9,11 @@ import (
 	"../TranscieverModel"
 )
 
+type DeviceAddress TranscieverModel.Address
+
 // UID unit ID
 type UID struct {
-	Address TranscieverModel.Address
+	Address DeviceAddress
 	Unit    byte
 }
 
@@ -148,7 +150,7 @@ func basicValidateResponse(r *response) bool {
 	return true
 }
 
-func validateResponse(to *TranscieverModel.Address, rq *request, rs *TranscieverModel.Message) (retResp response, retStatus bool) {
+func validateResponse(to *DeviceAddress, rq *request, rs *TranscieverModel.Message) (retResp response, retStatus bool) {
 	retResp = parseResponse(&rs.Payload)
 	defer func() {
 		if r := recover(); r != nil {
@@ -160,7 +162,7 @@ func validateResponse(to *TranscieverModel.Address, rq *request, rs *Transciever
 	if !basicValidateResponse(&retResp) {
 		panic(PacketValidationError(errors.New("basicValidateResponse")))
 	}
-	if *to != rs.Address {
+	if TranscieverModel.Address(*to) != rs.Address {
 		// todo count that cases
 		panic(PacketValidationError(errors.New("unexpected packet from wrong Address")))
 	}
@@ -175,7 +177,7 @@ func (rf *RFModel) CallFunction(uid UID, fno FuncNo, payload TranscieverModel.Pa
 	rqSerialized := serializeRequest(&rq)
 	for i := 3; 0 <= i; i-- {
 		log.Info(fmt.Sprintf("CallFunction try %v", i))
-		message := rf.transmitter.SendCommand(uid.Address, rqSerialized)
+		message := rf.transmitter.SendCommand(TranscieverModel.Address(uid.Address), rqSerialized)
 		if TranscieverModel.EMSDataPacket == message.Status {
 			// message received
 			if pm, ok := validateResponse(&uid.Address, &rq, &message); ok {

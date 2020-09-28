@@ -43,7 +43,7 @@ const (
 )
 
 type Key RFModel.UnitFunctionKey
-type DeviceKey RFModel.DeviceKey
+type DeviceKey RFModel.DeviceAddress
 
 // Value — either read value, or write value. One item per function
 type Value struct {
@@ -100,14 +100,6 @@ func (c *Cache) SetCached(uid RFModel.UID, fno RFModel.FuncNo, value string) {
 	c.cache[key].WriteState = WSPending
 }
 
-func (c *Cache) ensureDeviceExists(key DeviceKey) {
-	_, ok := c.deviceCache[key]
-	if !ok {
-		value := DeviceState{State: SOffline}
-		c.deviceCache[key] = &value
-	}
-}
-
 func (c *Cache) ensureKeyExists(key Key, isRead bool) {
 	c.ensureDeviceExists(DeviceKey(key.UID.Address))
 	_, ok := c.cache[key]
@@ -122,5 +114,13 @@ func (c *Cache) ensureKeyExists(key Key, isRead bool) {
 			LastRequest: time.Now(),
 		}
 		c.cache[key] = &value
+	}
+}
+
+func (c *Cache) ensureDeviceExists(key DeviceKey) {
+	_, ok := c.deviceCache[key]
+	if !ok {
+		value := DeviceState{State: SOffline}
+		c.deviceCache[key] = &value
 	}
 }

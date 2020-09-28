@@ -3,16 +3,11 @@ package RFModel
 import (
 	"fmt"
 	"time"
-
-	"../TranscieverModel"
 )
-
-// DeviceKey ...
-type DeviceKey TranscieverModel.Address
 
 // Device represents a device with one transceiver with multiple units in it
 type Device struct {
-	Address      TranscieverModel.Address
+	Address      DeviceAddress
 	LastUpdate   time.Time
 	UnitCount    uint
 	BuildNumber  uint32
@@ -32,12 +27,12 @@ type UnitFunction struct {
 }
 
 // Devices all known devices
-var Devices = map[DeviceKey]*Device{}
+var Devices = map[DeviceAddress]*Device{}
 
 // UnitFunctions all known functions of all known devices
 var UnitFunctions = map[UnitFunctionKey]UnitFunction{}
 
-func updateDeviceUnits(rf *RFModel, address TranscieverModel.Address) {
+func updateDeviceUnits(rf *RFModel, address DeviceAddress) {
 	unitsCountResponse := rf.CallFunction(UID{Address: address, Unit: 0}, FGetListOfUnitFunctions, []byte{})
 	// validation of the request. Don't like that huge chunk here it has to go somewhere else(
 	if 5 != len(unitsCountResponse) {
@@ -49,14 +44,13 @@ func updateDeviceUnits(rf *RFModel, address TranscieverModel.Address) {
 		))
 	}
 	// todo get device statistics here too
-	deviceKey := DeviceKey(address)
 	// delete all Unit functions before re-population
-	if _, ok := Devices[deviceKey]; ok {
-		for _, v := range Devices[deviceKey].AllFunctions {
+	if _, ok := Devices[address]; ok {
+		for _, v := range Devices[address].AllFunctions {
 			delete(UnitFunctions, v)
 		}
 	}
-	Devices[deviceKey] = &Device{
+	Devices[address] = &Device{
 		Address:      address,
 		LastUpdate:   time.Now(),
 		UnitCount:    uint(unitsCountResponse[0]),
@@ -81,14 +75,14 @@ func updateDeviceUnits(rf *RFModel, address TranscieverModel.Address) {
 				read:  EDataType(functionListResponse[f+1] >> 4),
 				write: EDataType(functionListResponse[f+1] & 0x0F),
 			}
-			Devices[deviceKey].AllFunctions = append(Devices[deviceKey].AllFunctions, key)
+			Devices[address].AllFunctions = append(Devices[address].AllFunctions, key)
 		}
 	}
 
 }
 
 func checkDeviceUnits(rf *RFModel, uid UID) {
-	if v, ok := Devices[DeviceKey(uid.Address)]; ok {
+	if v, ok := Devices[uid.Address]; ok {
 		if 1*time.Hour > time.Now().Sub(v.LastUpdate) {
 			return
 		}
