@@ -42,6 +42,7 @@ func checkPayload(payload TranscieverModel.Payload, length int, uid UID, fno Fun
 }
 
 // ReadFunction read from the unit
+// call given function with empty payload and parse result according to the function output type (fn 0 of a given unit)
 func (rf *RFModel) ReadFunction(uid UID, fno FuncNo) Variant {
 	// check all device units and functions data types to cast
 	checkDeviceUnits(rf, uid)
@@ -89,6 +90,7 @@ func (rf *RFModel) ReadFunction(uid UID, fno FuncNo) Variant {
 }
 
 // WriteFunction write to the unit
+// call given function with serialized value as a payload according to the function input type
 func (rf *RFModel) WriteFunction(uid UID, fno FuncNo, value Variant) {
 	checkDeviceUnits(rf, uid)
 	var payload TranscieverModel.Payload
