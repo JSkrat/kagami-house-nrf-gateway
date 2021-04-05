@@ -1,5 +1,7 @@
 package RFModel
 
+import "fmt"
+
 type ErrorType string
 
 const (
@@ -15,4 +17,16 @@ type Error struct {
 	Error error
 	Type  ErrorType
 	Code  byte
+}
+
+func Dump(b []byte) string {
+	var ret string
+	for i := range b {
+		c := b[i]
+		if 16 > c {
+			ret += "0"
+		}
+		ret += fmt.Sprintf("%X ", c)
+	}
+	return ret
 }

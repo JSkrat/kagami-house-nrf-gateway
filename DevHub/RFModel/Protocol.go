@@ -1,12 +1,11 @@
 package RFModel
 
 import (
+	"../TranscieverModel"
 	"bytes"
 	"encoding/binary"
 	"errors"
 	"fmt"
-
-	"../TranscieverModel"
 )
 
 type DeviceAddress TranscieverModel.Address
@@ -84,14 +83,14 @@ var transactionID byte = 0
 func serializeRequest(rq *request) TranscieverModel.Payload {
 	if MaxDataLengthRq < uint(rq.DataLength) {
 		panic(Error{
-			Error: fmt.Errorf("too big DataLength %v", rq.DataLength),
+			Error: fmt.Errorf("RFModel.serializeRequest: too big DataLength %v; ", rq.DataLength),
 			Type:  EBadParameter,
 		})
 	}
 	buf := bytes.Buffer{}
 	if err := binary.Write(&buf, binary.LittleEndian, rq); err != nil {
 		panic(Error{
-			Error: errors.New("binary.Write: " + err.Error()),
+			Error: fmt.Errorf("RFModel.serializeRequest: binary.Write: %v; ", err.Error()),
 			Type:  EGeneral,
 		})
 	}
@@ -101,7 +100,7 @@ func serializeRequest(rq *request) TranscieverModel.Payload {
 func parseResponse(r *TranscieverModel.Payload) (ret response) {
 	if PacketLength < uint(len(*r)) {
 		panic(Error{
-			Error: fmt.Errorf("too big packet of length %v", len(*r)),
+			Error: fmt.Errorf("RFModel.parseResponse: too big packet of length %v; ", len(*r)),
 			Type:  EPacketValidation,
 		})
 	}
@@ -110,7 +109,7 @@ func parseResponse(r *TranscieverModel.Payload) (ret response) {
 	buf.Write(make([]byte, int(PacketLength+1)-len(*r)))
 	if err := binary.Read(&buf, binary.LittleEndian, &ret); err != nil {
 		panic(Error{
-			Error: errors.New("binary.Read: " + err.Error()),
+			Error: fmt.Errorf("RFModel.parseResponse: binary.Read: %v; ", err.Error()),
 			Type:  EPacketValidation,
 		})
 	}
@@ -165,20 +164,20 @@ func validateResponse(to *DeviceAddress, rq *request, rs *TranscieverModel.Messa
 	retResp = parseResponse(&rs.Payload)
 	if !basicValidateResponse(&retResp) {
 		panic(Error{
-			Error: errors.New("basicValidateResponse"),
+			Error: errors.New("RFModel.validateResponse: basicValidateResponse; "),
 			Type:  EPacketValidation,
 		})
 	}
 	if TranscieverModel.Address(*to) != rs.Address {
 		// todo count that cases
 		panic(Error{
-			Error: errors.New("unexpected packet from wrong Address"),
+			Error: errors.New("RFModel.validateResponse: unexpected packet from wrong Address; "),
 			Type:  EPacketValidation,
 		})
 	}
 	if rq.TransactionID != retResp.TransactionID {
 		panic(Error{
-			Error: errors.New("bad transaction id"),
+			Error: errors.New("RFModel.validateResponse: bad transaction id; "),
 			Type:  EPacketValidation,
 		})
 	}
@@ -193,7 +192,7 @@ func (rf *RFModel) CallFunction(uid UID, fno FuncNo, payload TranscieverModel.Pa
 	rq := createRequest(uid.Unit, byte(fno), payload)
 	rqSerialized := serializeRequest(&rq)
 	for i := 3; 0 <= i; i-- {
-		log.Info(fmt.Sprintf("CallFunction try %v", i))
+		log.Info(fmt.Sprintf("RFModel.CallFunction try %v", i))
 		message := rf.transmitter.SendCommand(TranscieverModel.Address(uid.Address), rqSerialized)
 		if TranscieverModel.EMSDataPacket == message.Status {
 			// message received
@@ -201,22 +200,25 @@ func (rf *RFModel) CallFunction(uid UID, fno FuncNo, payload TranscieverModel.Pa
 				// now we have received, parsed and validated message from the device
 				if 0 != pm.Code {
 					panic(Error{
-						Error: fmt.Errorf("error code %v", pm.Code),
+						Error: fmt.Errorf(
+							"RFModel.CallFunction(uid %X, fno 0x%X, payload %s) bad error code 0x%X response %s; ",
+							uid, fno, Dump(payload), pm.Code, Dump(pm.Payload()),
+						),
 						Type:  EBadCode,
 						Code:  pm.Code,
 					})
 				}
-				log.Info(fmt.Sprintf("CallFunction uid %v, FNo %v, payload %v, response %v", uid, fno, payload, pm.Payload()))
+				log.Info(fmt.Sprintf("RFModel.CallFunction uid %X, FNo 0x%X, payload %s, response %s", uid, fno, Dump(payload), Dump(pm.Payload())))
 				return pm.Payload()
 			}
 		} else {
-			log.Info("RFModel.Protocol.callFucntion: listen timeout")
+			log.Info("RFModel.Protocol.CallFunction: listen timeout")
 		}
 	}
 	panic(Error{
 		Error: fmt.Errorf(
-			"CallFunction.Listen: response timeout 3 times in a row for uid %v, FNo %v, payload %v. Packet is %v",
-			uid, fno, payload, rqSerialized,
+			"RFModel.CallFunction.Listen: response timeout 3 times in a row for uid %X, FNo 0x%X, payload %s. Packet is %s",
+			uid, fno, Dump(payload), Dump(rqSerialized),
 		),
 		Type: EDeviceTimeout,
 	})

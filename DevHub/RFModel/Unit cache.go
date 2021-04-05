@@ -32,6 +32,7 @@ var Devices = map[DeviceAddress]*Device{}
 // UnitFunctions all known functions of all known devices
 var UnitFunctions = map[UnitFunctionKey]UnitFunction{}
 
+// checkDeviceUnits make sure cache has actual information about requested device units, functions and data types
 func checkDeviceUnits(rf *RFModel, uid UID) {
 	if v, ok := Devices[uid.Address]; ok {
 		if 1*time.Hour > time.Now().Sub(v.LastUpdate) {

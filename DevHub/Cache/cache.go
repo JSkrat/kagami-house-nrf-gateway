@@ -17,10 +17,12 @@ import (
 	"time"
 
 	"../RFModel"
+	"../OutsideInterface"
 )
 
 type Cache struct {
 	rf          *RFModel.RFModel
+	out			OutsideInterface.Interface
 	log         *logrus.Logger
 	cache       map[Key]*Value
 	deviceCache map[DeviceKey]*DeviceState
@@ -61,12 +63,13 @@ type DeviceState struct {
 	State State
 }
 
-func Init(self *Cache, rf *RFModel.RFModel) {
+func Init(self *Cache, rf *RFModel.RFModel, output OutsideInterface.Interface) {
 	self.log = logrus.New()
 	self.log.Formatter = new(logrus.TextFormatter)
 	self.log.Level = logrus.TraceLevel
 	self.log.Out = os.Stdout
 	self.rf = rf
+	self.out = output
 }
 
 // RegisterItem put requested uid/fno pair for read update routine

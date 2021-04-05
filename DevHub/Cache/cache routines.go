@@ -71,6 +71,7 @@ func (c *Cache) probeDevice(key DeviceKey) (isOnline bool) {
 	// it tries hard enough to conclude that if it failed, the device must be offline
 	// that function of unit 0 should never fail if device is online
 	// tons of noise will cause devices to be offline too, but can we do anything about that?
+	// todo: consider obtain metrics here instead
 	c.rf.CallFunction(RFModel.UID{Address: RFModel.DeviceAddress(key), Unit: 0}, RFModel.FGetListOfUnitFunctions, []byte{})
 	return true
 }
