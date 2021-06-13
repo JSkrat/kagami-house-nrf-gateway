@@ -1,6 +1,10 @@
 package RFModel
 
-import "fmt"
+import (
+	"fmt"
+	"strconv"
+	"strings"
+)
 
 type ErrorType string
 
@@ -27,6 +31,40 @@ func Dump(b []byte) string {
 			ret += "0"
 		}
 		ret += fmt.Sprintf("%X ", c)
+	}
+	return ret
+}
+
+func ParseAddress(s string) (ret DeviceAddress) {
+	for index, bStr := range strings.Split(s, ":") {
+		if index >= len(ret) {
+			panic(Error{
+				Error: fmt.Errorf("RFModel.ParseAddress: too long address; "),
+				Type:  EGeneral,
+			})
+		}
+		b, err := strconv.ParseUint(bStr, 16, 8)
+		if nil != err {
+			panic(Error{
+				Error: fmt.Errorf("RFModel.ParseAddress: strconv.ParseUInt: %v; ", err.Error()),
+				Type:  EGeneral,
+			})
+		}
+		ret[index] = byte(b)
+	}
+	return ret
+}
+
+func AddressToString(a DeviceAddress) (ret string) {
+	for i := range a[:] {
+		c := a[i]
+		if 16 > c {
+			ret += "0"
+		}
+		ret += fmt.Sprintf("%X", c)
+		if i < len(a)-1 {
+			ret += ":"
+		}
 	}
 	return ret
 }

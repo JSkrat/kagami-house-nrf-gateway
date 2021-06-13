@@ -1,0 +1,64 @@
+{
+	"actuator alpha green": {
+		"address": "AA:AA:AA:AA:01",
+		"units": {
+			"unit 1": {
+				"address": 1,
+				"functions": {
+					"Out 1 (B7)": {
+						"function": 0x10,
+						"read": true,
+						"write": true,
+					},
+					"Out 2 (D5)": {
+						"function": 0x12,
+						"read": true,
+						"write": true,
+					},
+					"Movement 1 (D3)": {
+						"function": 0x14,
+						"read": true,
+						"write": false,
+						"access period": 0.9,
+					},
+					"Movement 2 (D4)": {
+						"function": 0x16,
+						"read": true,
+						"write": false,
+					},
+					"opt (D0)": {
+						"function": 0x18,
+						"read": false,
+						"write": true,
+					},
+					"ch2 (D1)": {
+						"function": 0x1A,
+						"read": false,
+						"write": true,
+					},
+					"ch1 (D2)": {
+						"function": 0x1C,
+						"read": false,
+						"write": true,
+					},
+					"L1 (C3)": {
+						"function": 0x1E,
+						"read": false,
+						"write": true,
+					},
+					"L2 (C4)": {
+						"function": 0x20,
+						"read": false,
+						"write": true,
+					},
+					"L3 (C5)": {
+						"function": 0x22,
+						"read": false,
+						"write": true,
+					},
+
+				},
+			},
+		},
+	},
+}

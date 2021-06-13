@@ -169,16 +169,18 @@ func (tr *UMTransmitter) SendCommand(a TranscieverModel.Address, data Transcieve
 			log.Warning(fmt.Sprintf("UMModel.SendCommand(%v, %v) got response from the wrong address %v", a, data, msg))
 		}
 	}()
-	go func() {
+	/*go func() {
 		// in case modem won't say anything about timeout
 		<-time.After(1000 * time.Millisecond)
 		log.Warning(fmt.Sprintf("UMModel.SendCommand(%v, %v) modem did not generated any response packet in 1000ms", a, data))
 		timeout <- true
-	}()
+	}()*/
 	select {
 	case msg := <-response:
 		return msg
-	case <-timeout:
+	//case <-timeout:
+	case <-time.After(1000 * time.Millisecond):
+		log.Warning(fmt.Sprintf("UMModel.SendCommand(%v, %v) modem did not generated any response packet in 1000ms", a, data))
 		return TranscieverModel.Message{
 			Address: a,
 			Status:  TranscieverModel.EMSNone,

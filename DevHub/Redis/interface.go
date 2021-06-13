@@ -5,10 +5,11 @@ package Redis
 import (
 	"context"
 	"github.com/go-redis/redis"
+	//"github.com/flynn/json5"
 )
 
 type Interface struct {
-	db *redis.Client
+	db  *redis.Client
 	ctx context.Context
 }
 

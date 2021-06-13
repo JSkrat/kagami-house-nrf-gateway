@@ -2,12 +2,13 @@ package main
 
 import (
 	"fmt"
+	"time"
 
+	"./Cache"
 	"./NRFTransciever"
 	"./RFModel"
-	"./UartTransciever"
 	"./Redis"
-	"./Cache"
+	"./UartTransciever"
 	"gopkg.in/ini.v1"
 )
 
@@ -51,9 +52,13 @@ func main() {
 	var output Redis.Interface
 	Redis.Init(&output, settings.Section("").Key("redis").String())
 	var cache Cache.Cache
-	Cache.Init(&cache, &model, &output)
-	uid := RFModel.UID{Address: [5]byte{0xAA, 0xAA, 0xAA, 0xAA, 0x01}, Unit: 1}
-	model.WriteFunction(uid, 0x19, byte(0xE1))
-	response := model.ReadFunction(uid, 0x18).(byte)
-	fmt.Printf("Wrote 0xE1, read %v", response)
+	Cache.Init(&cache, &model, &output, settings.Section("").Key("devices").String())
+	for {
+		time.Sleep(time.Second)
+	}
+	/*uid := RFModel.UID{Address: [5]byte{0xAA, 0xAA, 0xAA, 0xAA, 0x01}, Unit: 1}
+	model.WriteFunction(uid, 0x11, true)
+	model.WriteFunction(uid, 0x13, false)
+	response := model.ReadFunction(uid, 0x14).(bool)
+	fmt.Printf("Mov1 read %v", response)*/
 }

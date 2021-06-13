@@ -2,8 +2,16 @@ package Cache
 
 import (
 	"../RFModel"
+	"fmt"
 	"time"
 )
+
+func (c *Cache) updateLoop() {
+	for {
+		time.Sleep(time.Millisecond * 100)
+		c.updateRoutine()
+	}
+}
 
 // updateRoutine is a single cycle, which is synchronously:
 // write all pending values
@@ -21,11 +29,11 @@ func (c *Cache) updateRoutine() {
 	// and then perform update cycle
 	for key, value := range c.cache {
 		if SOnline == c.deviceCache[DeviceKey(key.UID.Address)].State {
-			if WSPending == value.WriteState {
+			if value.Writeable && WSPending == value.WriteState {
 				c.performWrite(key)
 			}
 			c.updateAccessPeriod(key)
-			if time.Now().After(value.LastUpdate.Add(value.AccessPeriod)) {
+			if value.Readable && time.Now().After(value.LastUpdate.Add(value.AccessPeriod)) {
 				c.performRead(key)
 			}
 		}
@@ -53,13 +61,37 @@ func (c *Cache) performWrite(key Key) {
 func (c *Cache) performRead(key Key) {
 	c.cache[key].lock.Lock()
 	defer c.cache[key].lock.Unlock()
-
+	defer func() {
+		c.out.UpdateComponent(c.outputKey(key), c.cache[key].ReadValue)
+	}()
+	// this defer will run before unlock
+	defer func() {
+		if r := recover(); r != nil {
+			// todo what would it do if it can't convert error into RFModel.Error?
+			switch r.(RFModel.Error).Type {
+			case RFModel.EBadCode:
+				switch r.(RFModel.Error).Code {
+				case RFModel.ERCBadUnitId, RFModel.ERCBadFunctionId:
+					//panic(fmt.Errorf("Cache.performRead: incorrect mapping, return code is: %v; ", r.(RFModel.Error).Code))
+					c.cache[key].ReadValue = fmt.Sprintf("Cache.performRead: incorrect mapping, return code is: %X; ", r.(RFModel.Error).Code)
+				default:
+					c.cache[key].ReadValue = fmt.Sprintf("Cache.performRead: return code is: %X; ", r.(RFModel.Error).Code)
+				}
+			default:
+				c.cache[key].ReadValue = fmt.Sprintf("Cache.performRead: error type is: %v; ", r.(RFModel.Error).Type)
+			}
+		}
+	}()
+	value := c.rf.ReadFunction(key.UID, key.FNo)
+	c.cache[key].ReadValue = fmt.Sprintf("%v", value)
+	// todo move that into error handler
+	c.cache[key].LastUpdate = time.Now()
 }
 
 func (c *Cache) updateAccessPeriod(key Key) {
 	c.cache[key].lock.Lock()
 	defer c.cache[key].lock.Unlock()
-
+	// todo: implement update access period based on request frequency (LastRequest is being updated in GetCached)
 }
 
 func (c *Cache) probeDevice(key DeviceKey) (isOnline bool) {

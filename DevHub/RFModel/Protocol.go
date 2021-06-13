@@ -78,6 +78,25 @@ const (
 	FSetTextDescription     = 2
 )
 
+type EResponseCode byte
+
+const (
+	ERCOk               EResponseCode = 0
+	ERCAddressBadLength               = 1
+
+	ERCChBadChannels      = 0x10
+	ERCChBadPermissions   = 0x12
+	ERCChValidationFailed = 0x13
+
+	ERCNotImplemented              = 0x7F
+	ERCBadVersion                  = 0x90
+	ERCBadUnitId                   = 0xA0
+	ERCNotConsecutiveTransactionId = 0xB0
+	ERCBadFunctionId               = 0xC0
+	ERCResponseTooBig              = 0xD0
+	ERCBadRequestData              = 0xE0
+)
+
 var transactionID byte = 0
 
 func serializeRequest(rq *request) TranscieverModel.Payload {
@@ -204,8 +223,8 @@ func (rf *RFModel) CallFunction(uid UID, fno FuncNo, payload TranscieverModel.Pa
 							"RFModel.CallFunction(uid %X, fno 0x%X, payload %s) bad error code 0x%X response %s; ",
 							uid, fno, Dump(payload), pm.Code, Dump(pm.Payload()),
 						),
-						Type:  EBadCode,
-						Code:  pm.Code,
+						Type: EBadCode,
+						Code: pm.Code,
 					})
 				}
 				log.Info(fmt.Sprintf("RFModel.CallFunction uid %X, FNo 0x%X, payload %s, response %s", uid, fno, Dump(payload), Dump(pm.Payload())))
