@@ -34,7 +34,9 @@ func (i *Interface) UpdateComponent(key string, value string) {
 }
 
 func (i *Interface) RegisterWritableComponent(key string) <-chan OutsideInterface.SubMessage {
-	pubsub := i.db.Subscribe(i.ctx, fmt.Sprintf("__keyspace@%d__:%s", i.databaseNum, key))
+	redisChannel := fmt.Sprintf("__keyspace@%d__:%s", i.databaseNum, key)
+	log.Debug(fmt.Sprintf("Redis.RegisterWritableComponent(%s): subscribing to channel %s", key, redisChannel))
+	pubsub := i.db.Subscribe(i.ctx, redisChannel)
 	// Wait for confirmation that subscription is created before publishing anything.
 	_, err := pubsub.Receive(i.ctx)
 	if err != nil {
@@ -42,7 +44,8 @@ func (i *Interface) RegisterWritableComponent(key string) <-chan OutsideInterfac
 	}
 	// Go channel which receives messages.
 	ch := pubsub.Channel()
-	ret := make(chan OutsideInterface.SubMessage)
+	// buffered since we might push initial data into it before returning it
+	ret := make(chan OutsideInterface.SubMessage, 2)
 	go func() {
 		for message := range ch {
 			log.Debug(fmt.Sprintf("Redis.RegisterWritableComponent(%s) goroutine: chan <%s>, payload <%s>, payload slice <%v>", key, message.Channel, message.Payload, message.PayloadSlice))
@@ -59,6 +62,18 @@ func (i *Interface) RegisterWritableComponent(key string) <-chan OutsideInterfac
 			}
 		}
 	}()
-	i.db.Set(i.ctx, key, "", 0)
+	// make sure such key exists in redis, but if it does, preserve the value
+	// we update the values in the device from it (so empty redis db will initialize all writable devices functions to 0)
+	value, rerr := i.db.Get(i.ctx, key).Result()
+	if nil != rerr {
+		log.Debug(fmt.Sprintf("Redis.RegisterWritableComponent(%s): there was no initial value, creating", key))
+		i.db.Set(i.ctx, key, "", 0)
+	} else {
+		log.Debug(fmt.Sprintf("Redis.RegisterWritableComponent(%s): initial value is <%s>", key, value))
+		ret <- OutsideInterface.SubMessage{
+			Value: value,
+			Key:   key,
+		}
+	}
 	return ret
 }
