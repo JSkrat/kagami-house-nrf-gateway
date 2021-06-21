@@ -211,7 +211,7 @@ func (rf *RFModel) CallFunction(uid UID, fno FuncNo, payload TranscieverModel.Pa
 	rq := createRequest(uid.Unit, byte(fno), payload)
 	rqSerialized := serializeRequest(&rq)
 	for i := 3; 0 <= i; i-- {
-		log.Info(fmt.Sprintf("RFModel.CallFunction try %v", i))
+		log.Debug(fmt.Sprintf("RFModel.CallFunction try %v", i))
 		message := rf.transmitter.SendCommand(TranscieverModel.Address(uid.Address), rqSerialized)
 		if TranscieverModel.EMSDataPacket == message.Status {
 			// message received
@@ -227,11 +227,11 @@ func (rf *RFModel) CallFunction(uid UID, fno FuncNo, payload TranscieverModel.Pa
 						Code: pm.Code,
 					})
 				}
-				log.Info(fmt.Sprintf("RFModel.CallFunction uid %X, FNo 0x%X, payload %s, response %s", uid, fno, Dump(payload), Dump(pm.Payload())))
+				log.Debug(fmt.Sprintf("RFModel.CallFunction uid %X, FNo 0x%X, payload %s, response %s", uid, fno, Dump(payload), Dump(pm.Payload())))
 				return pm.Payload()
 			}
 		} else {
-			log.Info("RFModel.Protocol.CallFunction: listen timeout")
+			log.Debug("RFModel.Protocol.CallFunction: listen timeout")
 		}
 	}
 	panic(Error{

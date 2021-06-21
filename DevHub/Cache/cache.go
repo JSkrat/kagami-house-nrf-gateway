@@ -176,6 +176,11 @@ func (c *Cache) registerItems(data map[string]interface{}) {
 					key.FNo += 1
 					c.registerJsonItem(key, function, deviceName, unitName, functionName)
 					c.cache[key].Writeable = true
+					go func(channel <-chan OutsideInterface.SubMessage) {
+						for m := range channel {
+							c.writeRequest(key, m.Value)
+						}
+					}(c.out.RegisterWritableComponent(c.outputKey(key)))
 				}
 			}
 		}

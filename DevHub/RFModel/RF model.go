@@ -3,6 +3,7 @@ package RFModel
 import (
 	"fmt"
 	"os"
+	"sync"
 
 	"../TranscieverModel"
 	"github.com/sirupsen/logrus"
@@ -15,12 +16,13 @@ type RFModel struct {
 }
 
 var log = logrus.New()
+var rfLock sync.Mutex
 
 // Init ...
 func Init(rf *RFModel, transmitter TranscieverModel.Transmitter) {
 	// logging
 	log.Formatter = new(logrus.TextFormatter)
-	log.Level = logrus.TraceLevel
+	log.Level = logrus.InfoLevel
 	log.Out = os.Stdout
 	rf.transmitter = transmitter
 	//rf.transmitter.SendMessageStatus = make(chan nRF_model.Message)
@@ -47,6 +49,8 @@ func checkPayload(payload TranscieverModel.Payload, length int, uid UID, fno Fun
 // ReadFunction read from the unit
 // call given function with empty payload and parse result according to the function output type (fn 0 of a given unit)
 func (rf *RFModel) ReadFunction(uid UID, fno FuncNo) Variant {
+	rfLock.Lock()
+	defer rfLock.Unlock()
 	// check all device units and functions data types to cast
 	checkDeviceUnits(rf, uid)
 	payload := rf.CallFunction(uid, fno, []byte{})
@@ -94,23 +98,26 @@ func (rf *RFModel) ReadFunction(uid UID, fno FuncNo) Variant {
 			"RFModel.ReadFunction(uid %X FNo 0x%X payload %s) unexpected data type %v; ",
 			uid, fno, Dump(payload), dataType,
 		),
-		Type:  EGeneral,
+		Type: EGeneral,
 	})
 }
 
 // WriteFunction write to the unit
 // call given function with serialized value as a payload according to the function input type
 func (rf *RFModel) WriteFunction(uid UID, fno FuncNo, value Variant) {
+	rfLock.Lock()
+	defer rfLock.Unlock()
 	checkDeviceUnits(rf, uid)
 	var payload TranscieverModel.Payload
-	dataType := UnitFunctions[UnitFunctionKey{
+	ufKey := UnitFunctionKey{
 		UID: uid,
 		FNo: fno,
-	}].write
+	}
+	dataType := UnitFunctions[ufKey].write
 	switch dataType {
 	case EDBool:
 		{
-			if true == value {
+			if true == value || "true" == value {
 				payload = TranscieverModel.Payload{1}
 			} else {
 				payload = TranscieverModel.Payload{0}
@@ -144,7 +151,7 @@ func (rf *RFModel) WriteFunction(uid UID, fno FuncNo, value Variant) {
 				"RFModel.WriteFunction(uid %X FNo 0x%X value %v) unexpected input data format %v; ",
 				uid, fno, value, dataType,
 			),
-			Type:  EGeneral,
+			Type: EGeneral,
 		})
 	}
 	rf.CallFunction(uid, fno, payload)

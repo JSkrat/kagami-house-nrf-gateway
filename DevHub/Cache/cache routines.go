@@ -40,6 +40,16 @@ func (c *Cache) updateRoutine() {
 	}
 }
 
+// writeRequest is entrypoint for writing values from outside interface
+func (c *Cache) writeRequest(key Key, value string) {
+	c.cache[key].lock.Lock()
+	defer c.cache[key].lock.Unlock()
+	c.cache[key].WriteValue = value
+	c.cache[key].WriteState = WSPending
+}
+
+// performWrite is a routine to send write command to rf interface and update cache state
+// for the update routine
 func (c *Cache) performWrite(key Key) {
 	c.cache[key].lock.Lock()
 	defer c.cache[key].lock.Unlock()
@@ -58,6 +68,9 @@ func (c *Cache) performWrite(key Key) {
 	c.cache[key].WriteState = WSWritten
 }
 
+// performRead is a routine to send read command to rf interface, update cache values
+// and send updates to outside interface
+// for the update routine
 func (c *Cache) performRead(key Key) {
 	c.cache[key].lock.Lock()
 	defer c.cache[key].lock.Unlock()

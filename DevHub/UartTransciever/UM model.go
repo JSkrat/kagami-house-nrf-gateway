@@ -12,6 +12,7 @@ import (
 )
 
 var log = logrus.New()
+var sendCommandLock sync.Mutex
 
 // UMTransmitter handle
 type UMTransmitter struct {
@@ -111,6 +112,7 @@ func transmit(rf *UMTransmitter, a TranscieverModel.Address, data TranscieverMod
 	if !validateResponse(rs, cTransmit) {
 		panic(fmt.Errorf("modem response validation failed. Command %v, payload %v, response %v", cTransmit, data, response))
 	}
+	// here should be not ok if RF response queue was not empty
 	if rOk != rs.code {
 		panic(fmt.Errorf("modem response code is not ok. Request %v, response %v", rq, rs))
 	}
@@ -145,6 +147,9 @@ func getRxItem(rf *UMTransmitter) (ret TranscieverModel.Message) {
 
 // SendCommand commands modem to make a transaction to a given slave device and polls for the response
 func (tr *UMTransmitter) SendCommand(a TranscieverModel.Address, data TranscieverModel.Payload) (ret TranscieverModel.Message) {
+	sendCommandLock.Lock()
+	defer sendCommandLock.Unlock()
+	log.Debug(fmt.Sprintf("UM.SendCommand(%v, %v): transmit", a, data))
 	transmit(tr, a, data)
 	response := make(chan TranscieverModel.Message)
 	timeout := make(chan bool)
@@ -154,14 +159,20 @@ func (tr *UMTransmitter) SendCommand(a TranscieverModel.Address, data Transcieve
 			switch msg.Status {
 			default:
 				continue
+			// completely ignore ack, it doesn't mean we'll get the response
+			case TranscieverModel.EMSAckPacket:
+				log.Debug(fmt.Sprintf("UM.SendCommand(%v, %v).goroutine: received ack", a, data))
+				continue
 			// wasn't even sent
 			case TranscieverModel.EMSAckTimeout:
+				log.Debug(fmt.Sprintf("UM.SendCommand(%v, %v).goroutine: received ack timeout from a modem", a, data))
 				timeout <- false
 				return
 			// we need one of those to return
 			case TranscieverModel.EMSDataPacket:
 			case TranscieverModel.EMSSlaveTimeout:
 			}
+			log.Debug(fmt.Sprintf("UM.SendCommand(%v, %v).goroutine: received response or response timeout from a modem", a, data))
 			if msg.Address == a {
 				response <- msg
 				return
@@ -177,8 +188,14 @@ func (tr *UMTransmitter) SendCommand(a TranscieverModel.Address, data Transcieve
 	}()*/
 	select {
 	case msg := <-response:
+		log.Debug(fmt.Sprintf("UM.SendCommand(%v, %v): returning response %v", a, data, msg))
 		return msg
-	//case <-timeout:
+	case <-timeout:
+		log.Warning(fmt.Sprintf("UMModel.SendCommand(%v, %v): returning RF response timeout", a, data))
+		return TranscieverModel.Message{
+			Address: a,
+			Status:  TranscieverModel.EMSNone,
+		}
 	case <-time.After(1000 * time.Millisecond):
 		log.Warning(fmt.Sprintf("UMModel.SendCommand(%v, %v) modem did not generated any response packet in 1000ms", a, data))
 		return TranscieverModel.Message{
