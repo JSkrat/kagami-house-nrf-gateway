@@ -8,7 +8,6 @@ import (
 	"github.com/go-redis/redis"
 	"github.com/sirupsen/logrus"
 	"os"
-
 	//"github.com/flynn/json5"
 	"../OutsideInterface"
 )
@@ -16,16 +15,18 @@ import (
 var log = logrus.New()
 
 type Interface struct {
-	db  *redis.Client
-	ctx context.Context
+	db          *redis.Client
+	ctx         context.Context
+	databaseNum int
 }
 
-func Init(self *Interface, address string) {
+func Init(self *Interface, address string, db int) {
 	log.Formatter = new(logrus.TextFormatter)
 	log.Level = logrus.DebugLevel
 	log.Out = os.Stdout
 	self.db = redis.NewClient(&redis.Options{Addr: address})
 	self.ctx = context.Background()
+	self.databaseNum = db
 }
 
 func (i *Interface) UpdateComponent(key string, value string) {
@@ -33,7 +34,7 @@ func (i *Interface) UpdateComponent(key string, value string) {
 }
 
 func (i *Interface) RegisterWritableComponent(key string) <-chan OutsideInterface.SubMessage {
-	pubsub := i.db.Subscribe(i.ctx, "__keyspace@0__:"+key)
+	pubsub := i.db.Subscribe(i.ctx, fmt.Sprintf("__keyspace@%d__:%s", i.databaseNum, key))
 	// Wait for confirmation that subscription is created before publishing anything.
 	_, err := pubsub.Receive(i.ctx)
 	if err != nil {

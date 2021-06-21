@@ -50,15 +50,11 @@ func main() {
 	}
 	defer model.Close()
 	var output Redis.Interface
-	Redis.Init(&output, settings.Section("").Key("redis").String())
+	db, _ := settings.Section("redis").Key("db").Int()
+	Redis.Init(&output, settings.Section("redis").Key("server").String(), db)
 	var cache Cache.Cache
 	Cache.Init(&cache, &model, &output, settings.Section("").Key("devices").String())
 	for {
 		time.Sleep(time.Second)
 	}
-	/*uid := RFModel.UID{Address: [5]byte{0xAA, 0xAA, 0xAA, 0xAA, 0x01}, Unit: 1}
-	model.WriteFunction(uid, 0x11, true)
-	model.WriteFunction(uid, 0x13, false)
-	response := model.ReadFunction(uid, 0x14).(bool)
-	fmt.Printf("Mov1 read %v", response)*/
 }
