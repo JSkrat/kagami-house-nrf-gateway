@@ -23,12 +23,15 @@ import (
 	"../RFModel"
 )
 
+// "object"
 type Cache struct {
 	rf          *RFModel.RFModel
 	out         OutsideInterface.Interface
 	log         *logrus.Logger
 	cache       map[Key]*Value
+	cacheMutex  sync.RWMutex
 	deviceCache map[DeviceKey]*DeviceState
+	deviceCacheMutex sync.RWMutex
 }
 
 type State byte
@@ -59,7 +62,6 @@ type Value struct {
 	AccessPeriod time.Duration // update if LastUpdate + AccessPeriod is bigger than time.Now()
 	WriteValue   string
 	WriteState   WriteState
-	lock         sync.Mutex
 	DeviceName   string
 	UnitName     string
 	FunctionName string
@@ -107,8 +109,7 @@ func (c *Cache) RegisterItem(uid RFModel.UID, fno RFModel.FuncNo) {
 func (c *Cache) GetCached(uid RFModel.UID, fno RFModel.FuncNo) (value string, state State, timestamp time.Time) {
 	key := Key{UID: uid, FNo: fno}
 	c.ensureKeyExists(key, true)
-	c.cache[key].lock.Lock()
-	defer c.cache[key].lock.Unlock()
+	c.cacheMutex.RLock(); defer c.cacheMutex.RUnlock()
 	c.cache[key].LastRequest = time.Now()
 	value = c.cache[key].ReadValue
 	state = c.deviceCache[DeviceKey(key.UID.Address)].State
@@ -122,14 +123,14 @@ func (c *Cache) GetCached(uid RFModel.UID, fno RFModel.FuncNo) (value string, st
 func (c *Cache) SetCached(uid RFModel.UID, fno RFModel.FuncNo, value string) {
 	key := Key{UID: uid, FNo: fno}
 	c.ensureKeyExists(key, false)
-	c.cache[key].lock.Lock()
-	defer c.cache[key].lock.Unlock()
+	c.cacheMutex.RLock(); defer c.cacheMutex.RUnlock()
 	c.cache[key].WriteValue = value
 	c.cache[key].WriteState = WSPending
 }
 
 func (c *Cache) ensureKeyExists(key Key, isRead bool) {
 	c.ensureDeviceExists(DeviceKey(key.UID.Address))
+	c.cacheMutex.Lock(); defer c.cacheMutex.Unlock()
 	_, ok := c.cache[key]
 	if ok {
 		if isRead {
@@ -147,6 +148,7 @@ func (c *Cache) ensureKeyExists(key Key, isRead bool) {
 }
 
 func (c *Cache) ensureDeviceExists(key DeviceKey) {
+	c.deviceCacheMutex.Lock(); defer c.deviceCacheMutex.Unlock()
 	_, ok := c.deviceCache[key]
 	if !ok {
 		value := DeviceState{State: SOffline}
@@ -170,12 +172,16 @@ func (c *Cache) registerItems(data map[string]interface{}) {
 				key := Key{UID: uid, FNo: RFModel.FuncNo(byte(function["function"].(float64)))}
 				if function["read"].(bool) {
 					c.registerJsonItem(key, function, deviceName, unitName, functionName)
+					c.cacheMutex.RLock()
 					c.cache[key].Readable = true
+					c.cacheMutex.RUnlock()
 				}
 				if function["write"].(bool) {
 					key.FNo += 1
 					c.registerJsonItem(key, function, deviceName, unitName, functionName)
+					c.cacheMutex.RLock()
 					c.cache[key].Writeable = true
+					c.cacheMutex.RUnlock()
 					go func(channel <-chan OutsideInterface.SubMessage) {
 						for m := range channel {
 							c.writeRequest(key, m.Value)
@@ -189,6 +195,7 @@ func (c *Cache) registerItems(data map[string]interface{}) {
 
 func (c *Cache) registerJsonItem(key Key, function map[string]interface{}, deviceName string, unitName string, functionName string) {
 	c.RegisterItem(key.UID, key.FNo)
+	c.cacheMutex.RLock(); defer c.cacheMutex.RUnlock()
 	if apInterface, ok := function["access period"]; ok {
 		c.cache[key].AccessPeriod = time.Duration(apInterface.(float64) * float64(time.Second))
 	}

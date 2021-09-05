@@ -32,6 +32,7 @@ type NRFTransmitter struct {
 	//SendMessage       chan TranscieverModel.Message
 	SendMessageStatus chan TranscieverModel.Message
 	mutex             sync.Mutex
+	sendCommandLock sync.Mutex
 }
 
 type TransmitterSettings struct {
@@ -314,6 +315,8 @@ func Transmit(rf *NRFTransmitter, a TranscieverModel.Address, data TranscieverMo
 
 // SendCommand — synchronous method: send request and wait response or timeout
 func (rf *NRFTransmitter) SendCommand(a TranscieverModel.Address, data TranscieverModel.Payload) (ret TranscieverModel.Message) {
+	rf.sendCommandLock.Lock()
+	defer rf.sendCommandLock.Unlock()
 	Transmit(rf, a, data)
 	// wait for transmission completes
 	<-rf.SendMessageStatus

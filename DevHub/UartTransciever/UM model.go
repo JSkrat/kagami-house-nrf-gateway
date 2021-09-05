@@ -12,7 +12,6 @@ import (
 )
 
 var log = logrus.New()
-var sendCommandLock sync.Mutex
 
 // UMTransmitter handle
 type UMTransmitter struct {
@@ -21,6 +20,7 @@ type UMTransmitter struct {
 	//SendMessage       chan Message
 	SendMessageStatus chan TranscieverModel.Message
 	mutex             sync.Mutex
+	sendCommandLock sync.Mutex
 }
 
 // TransmitterSettings ...
@@ -147,8 +147,8 @@ func getRxItem(rf *UMTransmitter) (ret TranscieverModel.Message) {
 
 // SendCommand commands modem to make a transaction to a given slave device and polls for the response
 func (tr *UMTransmitter) SendCommand(a TranscieverModel.Address, data TranscieverModel.Payload) (ret TranscieverModel.Message) {
-	sendCommandLock.Lock()
-	defer sendCommandLock.Unlock()
+	tr.sendCommandLock.Lock()
+	defer tr.sendCommandLock.Unlock()
 	log.Debug(fmt.Sprintf("UM.SendCommand(%v, %v): transmit", a, data))
 	transmit(tr, a, data)
 	response := make(chan TranscieverModel.Message)

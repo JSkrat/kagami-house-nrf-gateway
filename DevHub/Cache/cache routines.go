@@ -19,6 +19,7 @@ func (c *Cache) updateLoop() {
 // update all read values according to their access frequency
 func (c *Cache) updateRoutine() {
 	// update device states first by pinging unit 0 function 0
+	c.deviceCacheMutex.RLock(); defer c.deviceCacheMutex.RUnlock()
 	for key := range c.deviceCache {
 		if c.probeDevice(key) {
 			c.deviceCache[key].State = SOnline
@@ -27,6 +28,7 @@ func (c *Cache) updateRoutine() {
 		}
 	}
 	// and then perform update cycle
+	c.cacheMutex.RLock(); defer c.cacheMutex.RUnlock()
 	for key, value := range c.cache {
 		if SOnline == c.deviceCache[DeviceKey(key.UID.Address)].State {
 			if value.Writeable && WSPending == value.WriteState {
@@ -42,8 +44,7 @@ func (c *Cache) updateRoutine() {
 
 // writeRequest is entrypoint for writing values from outside interface
 func (c *Cache) writeRequest(key Key, value string) {
-	c.cache[key].lock.Lock()
-	defer c.cache[key].lock.Unlock()
+	c.cacheMutex.RLock(); defer c.cacheMutex.RUnlock()
 	c.cache[key].WriteValue = value
 	c.cache[key].WriteState = WSPending
 }
@@ -51,16 +52,17 @@ func (c *Cache) writeRequest(key Key, value string) {
 // performWrite is a routine to send write command to rf interface and update cache state
 // for the update routine
 func (c *Cache) performWrite(key Key) {
-	c.cache[key].lock.Lock()
-	defer c.cache[key].lock.Unlock()
+	c.cacheMutex.RLock(); defer c.cacheMutex.RUnlock()
 	defer func() {
 		if r := recover(); r != nil {
+			c.deviceCacheMutex.RLock()
 			switch r.(RFModel.Error).Type {
 			case RFModel.EDeviceTimeout:
 				c.deviceCache[DeviceKey(key.UID.Address)].State = SOffline
 			default:
 				c.deviceCache[DeviceKey(key.UID.Address)].State = SError
 			}
+			c.deviceCacheMutex.RUnlock()
 			// we should generate event here
 		}
 	}()
@@ -72,8 +74,7 @@ func (c *Cache) performWrite(key Key) {
 // and send updates to outside interface
 // for the update routine
 func (c *Cache) performRead(key Key) {
-	c.cache[key].lock.Lock()
-	defer c.cache[key].lock.Unlock()
+	c.cacheMutex.RLock(); defer c.cacheMutex.RUnlock()
 	defer func() {
 		c.out.UpdateComponent(c.outputKey(key), c.cache[key].ReadValue)
 	}()
@@ -102,12 +103,11 @@ func (c *Cache) performRead(key Key) {
 }
 
 func (c *Cache) updateAccessPeriod(key Key) {
-	c.cache[key].lock.Lock()
-	defer c.cache[key].lock.Unlock()
 	// todo: implement update access period based on request frequency (LastRequest is being updated in GetCached)
 }
 
 func (c *Cache) probeDevice(key DeviceKey) (isOnline bool) {
+	// if there was a reply from a given device, it is online, otherwise it is offline :)
 	defer func() {
 		if r := recover(); r != nil {
 			isOnline = false
